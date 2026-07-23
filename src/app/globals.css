@@ -1,26 +1,165 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-bg: #04080d;
+  --color-shell: #070d14;
+  --color-panel: #0a121a;
+  --color-panel-2: #0d1721;
+  --color-line: #16242f;
+  --color-line-soft: #101c25;
+  --color-up: #14e2a0;
+  --color-down: #ff4a68;
+  --color-warn: #ffb020;
+  --color-txt: #d5e2ee;
+  --color-muted: #6b8497;
+  --color-dim: #47616f;
+  --color-accent: #16e0a0;
+  --color-accent-2: #29c8ff;
+  /* NEXORA AITOS brand cyan — the logo, active nav and headline numbers */
+  --color-brand: #00d4ff;
+  --color-brand-2: #0b6fe8;
+  --color-think: #ffc53d;
+  --color-vote: #3b9dff;
+  --color-wait: #ff8f3d;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-txt);
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Every price/percent in the app uses this so columns line up */
+  .num {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@utility panel {
+  background: linear-gradient(180deg, #0c161f 0%, #0a121a 100%);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+
+@utility panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+@utility chip {
+  background: linear-gradient(180deg, #0e1a24 0%, #0a141c 100%);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+}
+
+@utility glow-up {
+  text-shadow: 0 0 14px rgb(20 226 160 / 0.45);
+}
+
+/* Scrollbars — thin and dark so panels stay flush */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1d2f3c transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #1d2f3c;
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(20 226 160 / 0.5);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 4px rgb(20 226 160 / 0);
+  }
+}
+.dot-live {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes flash-up {
+  from {
+    background-color: rgb(20 226 160 / 0.16);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+@keyframes flash-down {
+  from {
+    background-color: rgb(255 74 104 / 0.16);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.flash-up {
+  animation: flash-up 0.7s ease-out;
+}
+.flash-down {
+  animation: flash-down 0.7s ease-out;
+}
+
+@keyframes sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.radar-sweep {
+  animation: sweep 4s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/* Dashes crawling along the AI network spokes — data in flight */
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+.flow-line {
+  stroke-dasharray: 3 10;
+  animation: flow-dash 1.4s linear infinite;
+}
+.flow-line-slow {
+  stroke-dasharray: 4 12;
+  animation: flow-dash 2.6s linear infinite;
+}
+
+@keyframes ping-ring {
+  0% {
+    r: 4;
+    opacity: 0.9;
+  }
+  100% {
+    r: 34;
+    opacity: 0;
+  }
+}
+.ping-ring {
+  animation: ping-ring 3s ease-out infinite;
 }
