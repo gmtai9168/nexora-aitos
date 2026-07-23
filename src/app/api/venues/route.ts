@@ -1,3 +1,6 @@
+/** This route fans out to several upstream APIs, so it needs headroom. */
+export const maxDuration = 30;
+
 type Venue = {
   id: string;
   name: string;

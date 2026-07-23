@@ -1,3 +1,6 @@
+/** This route fans out to several upstream APIs, so it needs headroom. */
+export const maxDuration = 30;
+
 type Probe = {
   id: string;
   name: string;

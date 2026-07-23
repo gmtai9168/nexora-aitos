@@ -2,6 +2,9 @@ import { getCryptoCandles } from "@/lib/server/binance";
 import { getStockCandles } from "@/lib/server/yahoo";
 import type { Candle } from "@/lib/types";
 
+/** This route fans out to several upstream APIs, so it needs headroom. */
+export const maxDuration = 30;
+
 const HOSTS = ["https://api.binance.com", "https://data-api.binance.vision"];
 
 /** Binance caps a kline request at 1000 bars, so deep history is paginated. */

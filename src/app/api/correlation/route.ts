@@ -1,5 +1,8 @@
 import { correlate, dailyCloses } from "@/lib/server/correlation";
 
+/** This route fans out to several upstream APIs, so it needs headroom. */
+export const maxDuration = 30;
+
 /** Benchmarks every asset on the desk is measured against. */
 const BENCHMARKS = [
   { symbol: "^IXIC", label: "NASDAQ", th: "แนสแด็ก" },

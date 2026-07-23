@@ -1,5 +1,8 @@
 import { correlate, dailyCloses } from "@/lib/server/correlation";
 
+/** This route fans out to several upstream APIs, so it needs headroom. */
+export const maxDuration = 30;
+
 const DEFAULT = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "^IXIC", "GC=F"];
 
 /**

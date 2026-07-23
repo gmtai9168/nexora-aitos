@@ -1,3 +1,6 @@
+/** This route fans out to several upstream APIs, so it needs headroom. */
+export const maxDuration = 30;
+
 async function json<T>(url: string): Promise<T | null> {
   try {
     const res = await fetch(url, {

@@ -1,3 +1,6 @@
+/** This route fans out to several upstream APIs, so it needs headroom. */
+export const maxDuration = 30;
+
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 

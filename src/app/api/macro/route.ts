@@ -2,6 +2,9 @@ import { getCryptoQuotes } from "@/lib/server/binance";
 import { getStockQuotes } from "@/lib/server/yahoo";
 import type { Quote } from "@/lib/types";
 
+/** This route fans out to several upstream APIs, so it needs headroom. */
+export const maxDuration = 30;
+
 export type MacroRow = {
   symbol: string;
   label: string;
