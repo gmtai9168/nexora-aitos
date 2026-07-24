@@ -94,6 +94,8 @@ export type CycleReport = {
   message: string;
   /** Learning memory after this cycle — the client persists it and sends it back. */
   memory: AiMemory;
+  /** Where the memory came from this cycle: central KV or the client copy. */
+  memorySource?: "kv" | "local";
 };
 
 export function sanitizeConfig(c: AiTraderConfig): AiTraderConfig {

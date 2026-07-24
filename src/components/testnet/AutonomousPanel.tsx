@@ -38,6 +38,21 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
   const [nextIn, setNextIn] = useState(0);
   // The /testnet page renders this client-side only, so localStorage is safe here.
   const [memory, setMemory] = useState<AiMemory>(loadMemory);
+  const [kv, setKv] = useState<{ configured: boolean; reachable: boolean; totalClosed: number } | null>(null);
+
+  // Ask once whether central KV memory is connected.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/testnet/kv-status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setKv(d);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const set = <K extends keyof AiTraderConfig>(k: K, v: AiTraderConfig[K]) =>
     setConfig((c) => ({ ...c, [k]: v }));
@@ -289,8 +304,13 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
       {/* Learning memory */}
       <div className="rounded border border-line-soft bg-[#0a121a]">
         <div className="flex items-center justify-between border-b border-line-soft px-2 py-1">
-          <span className="text-[9px] font-semibold text-brand">
-            ความจำที่ AI เรียนรู้ (บันทึกไว้ในเครื่องนี้)
+          <span className="flex items-center gap-1.5 text-[9px] font-semibold text-brand">
+            ความจำที่ AI เรียนรู้
+            {kv?.configured && kv.reachable ? (
+              <span className="rounded bg-[#0d2b23] px-1 text-[8px] font-normal text-up">เก็บกลาง KV ถาวร</span>
+            ) : (
+              <span className="rounded bg-[#111e28] px-1 text-[8px] font-normal text-dim">เก็บในเครื่องนี้</span>
+            )}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="num text-[9px] text-dim">
