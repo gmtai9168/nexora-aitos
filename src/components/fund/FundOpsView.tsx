@@ -37,8 +37,9 @@ const NO_CANDLES: Candle[] = [];
 export function FundOpsView() {
   const { symbol, quotes, candles, regime, context, exchanges, emergencyStop } = useMarket();
   const live = useLiveAccount();
-  // Real money under management when the testnet account is connected.
-  const aum = live.connected ? live.equity : AUM_BASE;
+  // Real money under management once the testnet account is present; the demo
+  // AUM is used only when there is genuinely no account connected.
+  const aum = live.connected || live.loading ? live.equity : AUM_BASE;
   const [history, setHistory] = useState<{ key: string; data: Candle[] }>({
     key: "",
     data: NO_CANDLES,

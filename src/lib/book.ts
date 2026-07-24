@@ -71,6 +71,7 @@ export type BookSummary = {
 /** The real account, when connected — shape mirrors the live-account provider. */
 export type RealAccount = {
   connected: boolean;
+  loading: boolean;
   wallet: number;
   available: number;
   unrealizedPnl: number;
@@ -94,7 +95,10 @@ export type RealAccount = {
  * the actual testnet balance. Otherwise it falls back to the demo constants.
  */
 export function buildBook(quotes: Map<string, Quote>, real?: RealAccount | null): BookSummary {
-  if (real?.connected) return buildRealBook(quotes, real);
+  // Once a live account is present, never fall back to the demo numbers — show
+  // the real book when connected, or a clean zero state while it is still
+  // loading. Demo is only for when there is genuinely no account at all.
+  if (real && (real.connected || real.loading)) return buildRealBook(quotes, real);
 
   const positions: Position[] = BOOK.map((e) => {
     const q = quotes.get(e.symbol);
