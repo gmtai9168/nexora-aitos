@@ -46,6 +46,7 @@ const NAV: NavItem[] = [
   { href: "/system-ops", th: "ระบบและโครงสร้าง", en: "System Operations", Icon: IconGear },
   { href: "/executive", th: "ศูนย์ผู้บริหาร", en: "Executive Center", Icon: IconStar },
   { href: "/history", th: "ประวัติการเทรด", en: "Trade History", Icon: IconHistory },
+  { href: "/testnet", th: "เทรดทดสอบ", en: "Testnet Execution", Icon: IconPulse },
   { href: "/alerts", th: "การแจ้งเตือน", en: "Alerts", Icon: IconBell },
   { href: "/settings", th: "ตั้งค่า", en: "Settings", Icon: IconGear },
 ];

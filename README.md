@@ -27,6 +27,7 @@ Next.js 16 (App Router) + TypeScript + Tailwind v4 + lightweight-charts
 | 17 | Trade History | `/history` | **ประวัติจากการจำลอง (PAPER)** บนราคาจริง · ตัวกรอง · Replay · AI Post-Trade · Audit |
 | 18 | Alerts Center | `/alerts` | **ตรวจจับสดทุก 20 วิ** — 15 กฎบนข้อมูลจริง · Dedup · Auto-resolve · Audit · ช่องทาง/สิทธิ์ |
 | 19 | Settings | `/settings` | **บันทึกจริงลง localStorage** · 12 แท็บตามสิทธิ์ · Security Score · Risk Impact · **ไม่รับ API Key** · Audit เดิม→ใหม่ |
+| T | Testnet Execution | `/testnet` | **ส่งคำสั่งจริงบน Binance Futures Testnet** (เงินปลอม) · HMAC ฝั่งเซิร์ฟเวอร์ · Risk Gate บังคับก่อนส่ง · URL ล็อก testnet |
 
 ## รันโปรเจกต์
 
