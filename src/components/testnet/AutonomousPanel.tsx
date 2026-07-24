@@ -105,6 +105,12 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
     } catch {
       /* non-fatal */
     }
+    // Also wipe the central store so learning restarts everywhere.
+    fetch("/api/testnet/ai-cycle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reset: true }),
+    }).catch(() => {});
   };
 
   // The live auto-loop: fires a real cycle every minute while enabled and not

@@ -20,11 +20,17 @@ const MEMORY_KEY = "nexora:ai-memory:v1";
  * `dryRun: true` computes decisions and never mutates the memory or the book.
  */
 export async function POST(request: Request) {
-  let body: { config?: Partial<AiTraderConfig>; dryRun?: boolean; memory?: AiMemory };
+  let body: { config?: Partial<AiTraderConfig>; dryRun?: boolean; memory?: AiMemory; reset?: boolean };
   try {
     body = await request.json();
   } catch {
     body = {};
+  }
+
+  // A reset clears the central memory too, not just the browser copy.
+  if (body.reset) {
+    if (kvConfigured()) await kvSetJson(MEMORY_KEY, EMPTY_MEMORY);
+    return Response.json({ ok: true, reset: true, memorySource: kvConfigured() ? "kv" : "local" }, { headers: { "Cache-Control": "no-store" } });
   }
 
   const config: AiTraderConfig = { ...DEFAULT_AI_CONFIG, ...(body.config ?? {}) };
