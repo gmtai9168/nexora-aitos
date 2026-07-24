@@ -6,6 +6,7 @@ import { TopBar } from "@/components/TopBar";
 import { SystemFooter } from "@/components/SystemFooter";
 import { MarketProvider } from "@/lib/market-context";
 import { LiveAccountProvider } from "@/lib/live-account";
+import { UiProvider } from "@/lib/ui-context";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const thai = Noto_Sans_Thai({ variable: "--font-thai", subsets: ["thai"] });
@@ -31,12 +32,14 @@ export default function RootLayout({
       >
         <MarketProvider>
           <LiveAccountProvider>
-            <TopBar />
-            <Sidebar />
-            <div className="ml-[196px] flex min-h-[calc(100vh-70px)] flex-col">
-              <main className="flex-1 p-2.5">{children}</main>
-              <SystemFooter />
-            </div>
+            <UiProvider>
+              <TopBar />
+              <Sidebar />
+              <div className="flex min-h-[calc(100vh-70px)] min-w-0 flex-col overflow-x-hidden lg:ml-[196px]">
+                <main className="min-w-0 flex-1 p-2 sm:p-2.5">{children}</main>
+                <SystemFooter />
+              </div>
+            </UiProvider>
           </LiveAccountProvider>
         </MarketProvider>
       </body>

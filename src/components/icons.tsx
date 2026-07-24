@@ -219,3 +219,18 @@ export const IconLogo = ({ size = 28, ...rest }: IconProps) => (
     <circle cx="29" cy="22" r="2.2" fill="#16e0a0" />
   </svg>
 );
+
+export const IconMenu = (p: IconProps) => (
+  <Svg {...p}>
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </Svg>
+);
+
+export const IconClose = (p: IconProps) => (
+  <Svg {...p}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </Svg>
+);

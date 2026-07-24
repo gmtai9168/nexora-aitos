@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bkkTime } from "@/lib/format";
 import { useMarket, useNow } from "@/lib/market-context";
+import { useUi } from "@/lib/ui-context";
 import { TOTAL_AGENTS } from "@/lib/agents";
 import { ALL_LISTINGS, badgeText } from "@/lib/universe";
-import { IconChevronDown, IconSearch, IconBell, IconMaximize } from "./icons";
+import { IconChevronDown, IconSearch, IconBell, IconMaximize, IconMenu } from "./icons";
 import { LogoLockup } from "./Logo";
 
 function SymbolSearch() {
@@ -42,7 +43,7 @@ function SymbolSearch() {
   };
 
   return (
-    <div ref={boxRef} className="relative w-[220px]">
+    <div ref={boxRef} className="relative w-[130px] sm:w-[190px] lg:w-[220px]">
       <label className="chip flex items-center gap-1.5 px-2 py-[5px]">
         <IconSearch size={13} className="shrink-0 text-dim" />
         <input
@@ -290,14 +291,24 @@ function Clock() {
 
 export function TopBar() {
   const { connected } = useMarket();
+  const { toggleNav } = useUi();
 
   return (
-    <header className="sticky top-0 z-30 flex h-[70px] items-center gap-3 border-b border-line bg-shell/95 px-3 backdrop-blur">
+    <header className="sticky top-0 z-40 flex h-[70px] items-center gap-2 border-b border-line bg-shell/95 px-2 backdrop-blur sm:gap-3 sm:px-3">
+      <button
+        type="button"
+        onClick={toggleNav}
+        aria-label="เปิดเมนู"
+        className="shrink-0 rounded-md p-1.5 text-muted hover:bg-[#0d1922] hover:text-txt lg:hidden"
+      >
+        <IconMenu size={20} />
+      </button>
+
       <Link href="/" className="shrink-0" aria-label="กลับหน้าหลัก">
         <LogoLockup />
       </Link>
 
-      <div className="ml-1 shrink-0">
+      <div className="ml-0 shrink-0 sm:ml-1">
         <SymbolSearch />
       </div>
 
@@ -318,23 +329,27 @@ export function TopBar() {
         </div>
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-3">
-        <AiChip />
-        <Clock />
+      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+        <span className="hidden sm:block">
+          <AiChip />
+        </span>
+        <span className="hidden md:block">
+          <Clock />
+        </span>
         <Notifications />
-        <button type="button" className="text-muted hover:text-txt" aria-label="เต็มจอ">
+        <button type="button" className="hidden text-muted hover:text-txt md:block" aria-label="เต็มจอ">
           <IconMaximize size={16} />
         </button>
 
-        <div className="flex items-center gap-2 border-l border-line pl-3">
+        <div className="flex items-center gap-2 border-l border-line pl-2 sm:pl-3">
           <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-brand to-brand-2 text-[10px] font-bold text-black">
             GM
           </span>
-          <span className="leading-tight">
+          <span className="hidden leading-tight sm:block">
             <span className="block text-[11px] text-txt">Global Mining</span>
             <span className="block text-[9px] text-dim">Administrator</span>
           </span>
-          <IconChevronDown size={13} className="text-dim" />
+          <IconChevronDown size={13} className="hidden text-dim sm:block" />
         </div>
       </div>
     </header>

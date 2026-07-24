@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useMarket } from "@/lib/market-context";
+import { useUi } from "@/lib/ui-context";
 import {
   IconBell,
   IconBot,
@@ -117,44 +118,62 @@ function EmergencyStop() {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { navOpen, closeNav } = useUi();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 flex w-[196px] flex-col border-r border-line bg-shell pt-[70px]">
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2.5">
-        {NAV.map(({ href, th, en, Icon }) => {
-          const active = pathname === href;
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`group relative flex items-center gap-2.5 rounded-md px-2.5 py-[7px] transition-colors ${
-                active
-                  ? "bg-gradient-to-r from-[#062a38] to-transparent text-brand"
-                  : "text-muted hover:bg-[#0d1922] hover:text-txt"
-              }`}
-            >
-              {active && (
-                <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-brand shadow-[0_0_10px_rgba(0,212,255,0.8)]" />
-              )}
-              <Icon size={16} />
-              <span className="min-w-0 leading-tight">
-                <span className="block truncate text-[11.5px] font-medium">{th}</span>
-                <span
-                  className={`block truncate text-[9px] ${
-                    active ? "text-brand/60" : "text-dim"
-                  }`}
-                >
-                  {en}
-                </span>
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+    <>
+      {/* Backdrop — only on mobile when the drawer is open */}
+      {navOpen && (
+        <button
+          type="button"
+          aria-label="ปิดเมนู"
+          onClick={closeNav}
+          className="fixed inset-0 top-[70px] z-20 bg-black/50 lg:hidden"
+        />
+      )}
 
-      <div className="border-t border-line p-2">
-        <EmergencyStop />
-      </div>
-    </aside>
+      <aside
+        className={`fixed inset-y-0 left-0 z-30 flex w-[196px] flex-col border-r border-line bg-shell pt-[70px] transition-transform duration-200 lg:translate-x-0 ${
+          navOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2.5">
+          {NAV.map(({ href, th, en, Icon }) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={closeNav}
+                className={`group relative flex items-center gap-2.5 rounded-md px-2.5 py-[7px] transition-colors ${
+                  active
+                    ? "bg-gradient-to-r from-[#062a38] to-transparent text-brand"
+                    : "text-muted hover:bg-[#0d1922] hover:text-txt"
+                }`}
+              >
+                {active && (
+                  <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-brand shadow-[0_0_10px_rgba(0,212,255,0.8)]" />
+                )}
+                <Icon size={16} />
+                <span className="min-w-0 leading-tight">
+                  <span className="block truncate text-[11.5px] font-medium">{th}</span>
+                  <span
+                    className={`block truncate text-[9px] ${
+                      active ? "text-brand/60" : "text-dim"
+                    }`}
+                  >
+                    {en}
+                  </span>
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-line p-2">
+          <EmergencyStop />
+        </div>
+      </aside>
+    </>
   );
 }
