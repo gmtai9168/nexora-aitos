@@ -457,17 +457,28 @@ function signalFor(kind: LabStrategyKind, i: number, c: Candle[], ind: Indicator
 
 export type ExitReason = "target" | "stop" | "trail" | "timeout" | "liquidation" | "eod";
 
-export const EXIT_META: Record<ExitReason, { th: string; tone: "up" | "down" | "warn" | "neutral" }> = {
-  target: { th: "ถึงเป้าหมาย", tone: "up" },
-  stop: { th: "ตัดขาดทุน", tone: "down" },
-  trail: { th: "Trailing Stop", tone: "warn" },
-  timeout: { th: "ครบเวลาถือ", tone: "neutral" },
-  liquidation: { th: "ถูกล้างพอร์ต", tone: "down" },
-  eod: { th: "จบชุดข้อมูล", tone: "neutral" },
+export const EXIT_META: Record<
+  ExitReason,
+  { th: string; en: string; tone: "up" | "down" | "warn" | "neutral" }
+> = {
+  target: { th: "ถึงเป้าหมาย", en: "Take profit", tone: "up" },
+  stop: { th: "ตัดขาดทุน", en: "Stop loss", tone: "down" },
+  trail: { th: "Trailing Stop", en: "Trailing stop", tone: "warn" },
+  timeout: { th: "ครบเวลาถือ", en: "Max hold time", tone: "neutral" },
+  liquidation: { th: "ถูกล้างพอร์ต", en: "Liquidated", tone: "down" },
+  eod: { th: "จบชุดข้อมูล", en: "End of data", tone: "neutral" },
 };
+
+/** One voter's opinion at the bar that produced the signal. */
+export type Vote = { kind: Exclude<LabStrategyKind, "ensemble">; dir: "LONG" | "SHORT"; strength: number };
+
+/** A stop that was moved while the position was open. */
+export type StopMove = { time: number; from: number; to: number };
 
 export type LabTrade = {
   id: number;
+  /** Bar that produced the signal — the fill happens on the next one. */
+  signalTime: number;
   entryTime: number;
   exitTime: number;
   entryIndex: number;
@@ -480,6 +491,8 @@ export type LabTrade = {
   qty: number;
   notional: number;
   leverage: number;
+  /** Currency amount the position was sized to risk — the unit behind `r`. */
+  riskUsd: number;
   feeUsd: number;
   fundingUsd: number;
   slippageUsd: number;
@@ -495,6 +508,35 @@ export type LabTrade = {
   confidence: number;
   regime: RegimeKind;
   equityAfter: number;
+  /** Which of the six models agreed and which disagreed at the signal bar. */
+  agree: Vote[];
+  disagree: Vote[];
+  stopMoves: StopMove[];
+  /** Best unrealised gain the trade ever showed, in R. */
+  mfe: number;
+  /** Worst unrealised loss the trade ever showed, in R. */
+  mae: number;
+  /** Traded volume on the signal bar — the only liquidity reading OHLCV gives. */
+  entryVolume: number;
+  /** ATR as a share of price at entry, i.e. how wide the market was moving. */
+  atrPctAtEntry: number;
+};
+
+/** A signal the engine refused to act on, and why. */
+export type SkippedSignal = {
+  time: number;
+  side: "LONG" | "SHORT";
+  reason: "maxPositions" | "direction" | "noStopDistance" | "noCash";
+  confidence: number;
+  regime: RegimeKind;
+  entryReason: string;
+};
+
+export const SKIP_META: Record<SkippedSignal["reason"], { th: string; en: string }> = {
+  maxPositions: { th: "เต็มเพดาน Position", en: "Position limit reached" },
+  direction: { th: "ถูกตัวกรองทิศทางปฏิเสธ", en: "Blocked by direction filter" },
+  noStopDistance: { th: "คำนวณระยะ Stop ไม่ได้", en: "No valid stop distance" },
+  noCash: { th: "เงินทุนไม่พอ", en: "Insufficient equity" },
 };
 
 export type DrawdownStats = {
@@ -516,6 +558,7 @@ export type LabResult = {
   note: string;
   config: LabConfig;
   trades: LabTrade[];
+  skipped: SkippedSignal[];
   equity: number[];
   times: number[];
   buyHold: number[];
@@ -557,6 +600,7 @@ function emptyResult(config: LabConfig, note: string): LabResult {
     note,
     config,
     trades: [],
+    skipped: [],
     equity: [config.capital],
     times: [],
     buyHold: [config.capital],
@@ -606,6 +650,7 @@ type OpenPosition = {
   side: "LONG" | "SHORT";
   entryIndex: number;
   entryTime: number;
+  signalTime: number;
   entry: number;
   qty: number;
   notional: number;
@@ -613,6 +658,9 @@ type OpenPosition = {
   target: number;
   liq: number;
   best: number;
+  /** Extremes reached while open, for the MFE/MAE readings. */
+  hiPrice: number;
+  loPrice: number;
   atr: number;
   riskUsd: number;
   entryFee: number;
@@ -620,7 +668,29 @@ type OpenPosition = {
   reason: string;
   confidence: number;
   regime: RegimeKind;
+  agree: Vote[];
+  disagree: Vote[];
+  stopMoves: StopMove[];
+  entryVolume: number;
+  atrPctAtEntry: number;
 };
+
+/** The stop distance the position was sized on — the R that MFE/MAE use. */
+function stopDistOf(p: OpenPosition): number {
+  return Math.abs(p.entry - (p.stopMoves[0]?.from ?? p.stop));
+}
+
+/** Every model's read at one bar — the committee record behind a trade. */
+function pollCommittee(i: number, c: Candle[], ind: Indicators, dir: "LONG" | "SHORT") {
+  const agree: Vote[] = [];
+  const disagree: Vote[] = [];
+  for (const v of VOTERS) {
+    const s = rawSignal(v, i, c, ind);
+    if (!s) continue;
+    (s.dir === dir ? agree : disagree).push({ kind: v, dir: s.dir, strength: s.strength });
+  }
+  return { agree, disagree };
+}
 
 /**
  * Event-driven backtest with explicit trading costs.
@@ -647,10 +717,23 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
 
   let cash = cfg.capital;
   const trades: LabTrade[] = [];
+  const skipped: SkippedSignal[] = [];
   const equity: number[] = [];
   const times: number[] = [];
   const open: OpenPosition[] = [];
-  let queued: { side: "LONG" | "SHORT"; reason: string; confidence: number; atr: number; regime: RegimeKind } | null = null;
+  type Queued = {
+    side: "LONG" | "SHORT";
+    reason: string;
+    confidence: number;
+    atr: number;
+    regime: RegimeKind;
+    signalTime: number;
+    agree: Vote[];
+    disagree: Vote[];
+    volume: number;
+    price: number;
+  };
+  let queued: Queued | null = null;
   let nextId = 1;
   let liquidations = 0;
   let totalFees = 0;
@@ -697,6 +780,7 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
     const holdBars = i - p.entryIndex;
     trades.push({
       id: p.id,
+      signalTime: p.signalTime,
       entryTime: p.entryTime,
       exitTime: candles[i].time,
       entryIndex: p.entryIndex,
@@ -709,6 +793,7 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
       qty: p.qty,
       notional: p.notional,
       leverage: cfg.leverage,
+      riskUsd: p.riskUsd,
       feeUsd: p.entryFee + exitFee,
       fundingUsd: funding,
       slippageUsd: p.entrySlip + exitSlip,
@@ -723,6 +808,15 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
       confidence: p.confidence,
       regime: p.regime,
       equityAfter: cash,
+      agree: p.agree,
+      disagree: p.disagree,
+      stopMoves: p.stopMoves,
+      // Both are measured against the original stop distance, so 1 MFE means
+      // the trade was once a full R in front.
+      mfe: stopDistOf(p) ? ((sign > 0 ? p.hiPrice - p.entry : p.entry - p.loPrice) / stopDistOf(p)) : 0,
+      mae: stopDistOf(p) ? ((sign > 0 ? p.entry - p.loPrice : p.hiPrice - p.entry) / stopDistOf(p)) : 0,
+      entryVolume: p.entryVolume,
+      atrPctAtEntry: p.atrPctAtEntry,
     });
   };
 
@@ -730,6 +824,22 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
     const bar = candles[i];
 
     // 1) Fill anything the previous bar queued, at this bar's open.
+    if (queued) {
+      const skip = (reason: SkippedSignal["reason"]) =>
+        skipped.push({
+          time: queued!.signalTime,
+          side: queued!.side,
+          reason,
+          confidence: queued!.confidence,
+          regime: queued!.regime,
+          entryReason: queued!.reason,
+        });
+
+      if (open.length >= cfg.maxPositions) skip("maxPositions");
+      else if (cash <= 0) skip("noCash");
+      else if (queued.atr * cfg.stopAtr <= 0) skip("noStopDistance");
+    }
+
     if (queued && open.length < cfg.maxPositions && cash > 0) {
       const sign = queued.side === "LONG" ? 1 : -1;
       const raw = bar.open;
@@ -757,6 +867,7 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
             side: queued.side,
             entryIndex: i,
             entryTime: bar.time,
+            signalTime: queued.signalTime,
             entry,
             qty,
             notional,
@@ -764,6 +875,11 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
             target: entry + sign * stopDist * cfg.targetR,
             liq: entry - sign * liqDist,
             best: entry,
+            // The position is live for the rest of the bar it filled on, so its
+            // range counts toward MFE/MAE. Exit checks still skip this bar —
+            // those drive decisions, these only describe what already happened.
+            hiPrice: Math.max(bar.high, entry),
+            loPrice: Math.min(bar.low, entry),
             atr: queued.atr,
             riskUsd,
             entryFee,
@@ -771,6 +887,11 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
             reason: queued.reason,
             confidence: queued.confidence,
             regime: queued.regime,
+            agree: queued.agree,
+            disagree: queued.disagree,
+            stopMoves: [],
+            entryVolume: queued.volume,
+            atrPctAtEntry: queued.price ? (queued.atr / queued.price) * 100 : 0,
           });
         }
       }
@@ -781,6 +902,8 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
     for (let k = open.length - 1; k >= 0; k--) {
       const p = open[k];
       if (p.entryIndex === i) continue; // just filled at this open
+      if (bar.high > p.hiPrice) p.hiPrice = bar.high;
+      if (bar.low < p.loPrice) p.loPrice = bar.low;
       const long = p.side === "LONG";
       const hitLiq = cfg.leverage > 1 && (long ? bar.low <= p.liq : bar.high >= p.liq);
       const hitStop = long ? bar.low <= p.stop : bar.high >= p.stop;
@@ -802,6 +925,7 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
         open.splice(k, 1);
       } else if (cfg.trailing) {
         // Trail on the close only — using this bar's extreme would peek.
+        const before = p.stop;
         if (long) {
           if (bar.close > p.best) p.best = bar.close;
           if (p.best - p.entry > p.atr * cfg.stopAtr) {
@@ -813,6 +937,7 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
             p.stop = Math.min(p.stop, p.best + p.atr * cfg.trailAtr);
           }
         }
+        if (p.stop !== before) p.stopMoves.push({ time: bar.time, from: before, to: p.stop });
       }
     }
 
@@ -820,21 +945,39 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
     times.push(bar.time);
 
     // 3) Read a signal from closed data and queue it for the next open.
-    if (i < n - 1 && open.length < cfg.maxPositions && ind.atr[i] > 0) {
+    if (i < n - 1 && ind.atr[i] > 0) {
       const s = signalFor(cfg.strategy, i, candles, ind);
-      const allowed =
-        s &&
-        (cfg.direction === "both" ||
+      if (s) {
+        const allowed =
+          cfg.direction === "both" ||
           (cfg.direction === "long" && s.dir === "LONG") ||
-          (cfg.direction === "short" && s.dir === "SHORT"));
-      if (s && allowed) {
-        queued = {
-          side: s.dir,
-          reason: s.reason,
-          confidence: Math.round(50 + s.strength * 45),
-          atr: ind.atr[i],
-          regime: ind.regimes[i],
-        };
+          (cfg.direction === "short" && s.dir === "SHORT");
+        const confidence = Math.round(50 + s.strength * 45);
+
+        if (!allowed) {
+          skipped.push({
+            time: bar.time,
+            side: s.dir,
+            reason: "direction",
+            confidence,
+            regime: ind.regimes[i],
+            entryReason: s.reason,
+          });
+        } else {
+          const { agree, disagree } = pollCommittee(i, candles, ind, s.dir);
+          queued = {
+            side: s.dir,
+            reason: s.reason,
+            confidence,
+            atr: ind.atr[i],
+            regime: ind.regimes[i],
+            signalTime: bar.time,
+            agree,
+            disagree,
+            volume: bar.volume,
+            price: bar.close,
+          };
+        }
       }
     }
   }
@@ -845,7 +988,7 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
     equity[equity.length - 1] = cash;
   }
 
-  return summarise(trades, equity, times, candles.slice(warmup), cfg, ind.barSec, {
+  return summarise(trades, skipped, equity, times, candles.slice(warmup), cfg, ind.barSec, {
     totalFees,
     totalFunding,
     totalSlippage,
@@ -855,6 +998,7 @@ export function runLab(candles: Candle[], cfg: LabConfig): LabResult {
 
 function summarise(
   trades: LabTrade[],
+  skipped: SkippedSignal[],
   equity: number[],
   times: number[],
   candles: Candle[],
@@ -909,6 +1053,7 @@ function summarise(
     ok: trades.length > 0,
     note: trades.length ? "" : "เงื่อนไขนี้ไม่เกิดสัญญาณเลยในช่วงข้อมูลที่เลือก",
     trades,
+    skipped,
     equity,
     times,
     buyHold,
