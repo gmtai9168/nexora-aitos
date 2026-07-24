@@ -154,6 +154,70 @@ export const serverTime = () => publicGet<{ serverTime: number }>("/fapi/v1/time
 export const markPrice = (symbol: string) =>
   publicGet<{ symbol: string; markPrice: string; indexPrice: string }>(`/fapi/v1/premiumIndex?symbol=${symbol}`);
 
+export type Kline = { time: number; open: number; high: number; low: number; close: number; volume: number };
+
+/** Public candles from the testnet feed — signals run on the same prices we trade. */
+export async function klines(symbol: string, interval: string, limit: number): Promise<TestnetResult<Kline[]>> {
+  const res = await publicGet<(string | number)[][]>(
+    `/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
+  );
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    data: res.data.map((k) => ({
+      time: Math.floor(Number(k[0]) / 1000),
+      open: Number(k[1]),
+      high: Number(k[2]),
+      low: Number(k[3]),
+      close: Number(k[4]),
+      volume: Number(k[5]),
+    })),
+  };
+}
+
+/* Symbol precision — Binance rejects orders whose quantity has too many
+ * decimals or falls below the minimum, so it must be rounded to the book. */
+type SymbolRule = { quantityPrecision: number; minQty: number; stepSize: number };
+let ruleCache: Map<string, SymbolRule> | null = null;
+let ruleCachedAt = 0;
+
+async function symbolRules(): Promise<Map<string, SymbolRule>> {
+  if (ruleCache && Date.now() - ruleCachedAt < 3_600_000) return ruleCache;
+  const res = await publicGet<{
+    symbols: {
+      symbol: string;
+      quantityPrecision: number;
+      filters: { filterType: string; minQty?: string; stepSize?: string }[];
+    }[];
+  }>("/fapi/v1/exchangeInfo");
+  const map = new Map<string, SymbolRule>();
+  if (res.ok) {
+    for (const s of res.data.symbols) {
+      const lot = s.filters.find((f) => f.filterType === "LOT_SIZE");
+      map.set(s.symbol, {
+        quantityPrecision: s.quantityPrecision,
+        minQty: Number(lot?.minQty ?? 0),
+        stepSize: Number(lot?.stepSize ?? 0),
+      });
+    }
+    ruleCache = map;
+    ruleCachedAt = Date.now();
+  }
+  return map;
+}
+
+/** Rounds a raw quantity down to the symbol's step size; null if below minimum. */
+export async function roundQuantity(symbol: string, raw: number): Promise<number | null> {
+  const rules = await symbolRules();
+  const rule = rules.get(symbol);
+  if (!rule) return Number(raw.toFixed(3));
+  const step = rule.stepSize || Math.pow(10, -rule.quantityPrecision);
+  const rounded = Math.floor(raw / step) * step;
+  const qty = Number(rounded.toFixed(rule.quantityPrecision));
+  if (qty < rule.minQty || qty <= 0) return null;
+  return qty;
+}
+
 export const account = () => signed<AccountRaw>("GET", "/fapi/v2/account");
 export const positions = () => signed<PositionRaw[]>("GET", "/fapi/v2/positionRisk");
 export const openOrders = (symbol?: string) =>

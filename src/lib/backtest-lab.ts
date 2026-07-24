@@ -451,6 +451,35 @@ function signalFor(kind: LabStrategyKind, i: number, c: Candle[], ind: Indicator
   };
 }
 
+export type LiveSignal = {
+  dir: "LONG" | "SHORT";
+  confidence: number;
+  reason: string;
+  regime: RegimeKind;
+  atrPct: number;
+};
+
+/**
+ * The signal at the most recent *closed* bar — the live counterpart of the
+ * backtest's per-bar read. The autonomous trader calls this each cycle, so the
+ * decision it acts on is computed by the exact same code the backtest validated.
+ */
+export function latestSignal(candles: Candle[], strategy: LabStrategyKind): LiveSignal | null {
+  if (candles.length < 150) return null;
+  const ind = buildIndicators(candles);
+  const i = candles.length - 1;
+  if (ind.atr[i] <= 0) return null;
+  const s = signalFor(strategy, i, candles, ind);
+  if (!s) return null;
+  return {
+    dir: s.dir,
+    confidence: Math.round(50 + s.strength * 45),
+    reason: s.reason,
+    regime: ind.regimes[i],
+    atrPct: candles[i].close ? (ind.atr[i] / candles[i].close) * 100 : 0,
+  };
+}
+
 /* ------------------------------------------------------------------ *
  * Trades & results
  * ------------------------------------------------------------------ */

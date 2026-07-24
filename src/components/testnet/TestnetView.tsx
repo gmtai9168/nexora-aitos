@@ -15,6 +15,7 @@ import {
   type TestnetStatus,
 } from "@/lib/testnet";
 import { Panel, Tag } from "../Panel";
+import { AutonomousPanel } from "./AutonomousPanel";
 
 const POLL_MS = 8000;
 
@@ -185,19 +186,22 @@ export function TestnetView() {
             <OrdersPanel orders={orders} onCancel={cancel} />
           </div>
 
-          <OrderForm
-            form={form}
-            onChange={setForm}
-            refPrice={refPrice}
-            preview={preview}
-            submitting={submitting}
-            result={result}
-            confirming={confirming}
-            onConfirm={() => setConfirming(true)}
-            onCancelConfirm={() => setConfirming(false)}
-            onSubmit={submit}
-            disabled={!connected}
-          />
+          <div className="flex flex-col gap-2.5">
+            <AutonomousPanel onTraded={refresh} />
+            <OrderForm
+              form={form}
+              onChange={setForm}
+              refPrice={refPrice}
+              preview={preview}
+              submitting={submitting}
+              result={result}
+              confirming={confirming}
+              onConfirm={() => setConfirming(true)}
+              onCancelConfirm={() => setConfirming(false)}
+              onSubmit={submit}
+              disabled={!connected}
+            />
+          </div>
         </div>
       )}
     </div>
