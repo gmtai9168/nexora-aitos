@@ -39,8 +39,10 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
   // The /testnet page renders this client-side only, so localStorage is safe here.
   const [memory, setMemory] = useState<AiMemory>(loadMemory);
   const [kv, setKv] = useState<{ configured: boolean; reachable: boolean; totalClosed: number } | null>(null);
+  const [server, setServer] = useState<{ enabled: boolean; kv: boolean; log: { at: number; opened: number; closed: number; message: string }[] } | null>(null);
+  const [serverBusy, setServerBusy] = useState(false);
 
-  // Ask once whether central KV memory is connected.
+  // Ask once whether central KV memory is connected, and the 24/7 state.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/testnet/kv-status")
@@ -49,8 +51,19 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
         if (!cancelled) setKv(d);
       })
       .catch(() => {});
+    const loadServer = () =>
+      fetch("/api/ai/control")
+        .then((r) => r.json())
+        .then((d) => {
+          if (!cancelled) setServer(d);
+        })
+        .catch(() => {});
+    loadServer();
+    // Refresh the server state periodically so the run log stays current.
+    const id = setInterval(loadServer, 30_000);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, []);
 
@@ -96,6 +109,22 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
     },
     [config, onTraded],
   );
+
+  const armServer = async (enabled: boolean) => {
+    setServerBusy(true);
+    try {
+      const res = await fetch("/api/ai/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, config }),
+      });
+      const d = await res.json();
+      if (d.ok) setServer(d);
+    } catch {
+      /* ignore */
+    }
+    setServerBusy(false);
+  };
 
   const view = memoryView(memory);
   const resetMemory = () => {
@@ -306,6 +335,65 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
           </ul>
         </div>
       )}
+
+      {/* 24/7 server mode */}
+      <div className={`rounded border p-2 ${server?.enabled ? "border-up/40 bg-[#0b1f1a]" : "border-line-soft bg-[#081017]"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0">
+            <span className="block text-[10.5px] font-semibold text-txt">
+              ทำงานตลอด 24 ชม. (แม้ปิดเครื่อง)
+            </span>
+            <span className="block text-[8.5px] text-dim">
+              เซิร์ฟเวอร์รันเองตามตัวจับเวลา — ไม่ต้องเปิดหน้านี้ค้าง
+            </span>
+          </span>
+          {server?.kv === false ? (
+            <span className="shrink-0 rounded border border-warn/40 bg-[#20180a] px-1.5 py-[2px] text-[8.5px] text-warn">
+              ต้องเชื่อม KV ก่อน
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => armServer(!server?.enabled)}
+              disabled={serverBusy || emergencyStop}
+              className={`shrink-0 rounded px-2.5 py-[6px] text-[10px] font-bold transition-colors disabled:opacity-40 ${
+                server?.enabled ? "bg-down text-white" : "bg-up text-black"
+              }`}
+            >
+              {serverBusy ? "…" : server?.enabled ? "■ ปิดโหมด 24 ชม." : "▶ เปิดโหมด 24 ชม."}
+            </button>
+          )}
+        </div>
+
+        {server?.enabled && (
+          <div className="mt-1.5 rounded border border-line-soft bg-[#0a121a] px-2 py-1.5">
+            <div className="text-[8.5px] text-muted">
+              ตั้งตัวจับเวลาให้ยิง URL นี้ทุก 3–5 นาที (เช่น cron-job.org ฟรี):
+            </div>
+            <code className="mt-[2px] block break-all text-[9px] text-brand">
+              https://nexora-aitos.com/api/cron/ai-cycle
+            </code>
+            <div className="mt-1 text-[8.5px] leading-snug text-dim">
+              Vercel Hobby รัน Cron ในตัวได้แค่วันละครั้ง — จึงตั้ง fallback รายวันไว้แล้ว
+              ถ้าอยากให้ถี่ทุกไม่กี่นาที ใช้ตัวจับเวลาภายนอกฟรียิง URL ข้างบน หรืออัปเป็น Vercel Pro
+            </div>
+          </div>
+        )}
+
+        {server && server.log.length > 0 && (
+          <ul className="mt-1.5 max-h-[80px] overflow-y-auto">
+            {server.log.slice(0, 5).map((l, i) => (
+              <li key={i} className="flex items-center gap-1.5 text-[8.5px] text-dim">
+                <span className="num text-muted">
+                  {new Date(l.at).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour12: false })}
+                </span>
+                <span>· เปิด {l.opened} · ปิด {l.closed}</span>
+                <span className="truncate">· {l.message}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {/* Learning memory */}
       <div className="rounded border border-line-soft bg-[#0a121a]">
