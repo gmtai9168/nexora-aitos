@@ -68,7 +68,34 @@ export type BookSummary = {
   drawdown: number;
 };
 
-export function buildBook(quotes: Map<string, Quote>): BookSummary {
+/** The real account, when connected — shape mirrors the live-account provider. */
+export type RealAccount = {
+  connected: boolean;
+  wallet: number;
+  available: number;
+  unrealizedPnl: number;
+  equity: number;
+  positions: {
+    symbol: string;
+    side: "LONG" | "SHORT";
+    size: number;
+    notional: number;
+    entryPrice: number;
+    markPrice: number;
+    unrealizedPnl: number;
+    liquidationPrice: number;
+    leverage: number;
+  }[];
+};
+
+/**
+ * When a real account is passed and connected, the book is built entirely from
+ * it — real wallet, real positions, real P&L — so every figure downstream is
+ * the actual testnet balance. Otherwise it falls back to the demo constants.
+ */
+export function buildBook(quotes: Map<string, Quote>, real?: RealAccount | null): BookSummary {
+  if (real?.connected) return buildRealBook(quotes, real);
+
   const positions: Position[] = BOOK.map((e) => {
     const q = quotes.get(e.symbol);
     const price = q?.price ?? 0;
@@ -129,6 +156,71 @@ export function buildBook(quotes: Map<string, Quote>): BookSummary {
     leverage: notional / equity,
     configuredLeverage: CONFIGURED_LEVERAGE,
     availableMargin: equity - marginUsed,
+    longShare: notional ? (longNotional / notional) * 100 : 0,
+    winRate: positions.length ? (wins.length / positions.length) * 100 : 0,
+    profitFactor: losses > 0 ? gains / losses : gains > 0 ? 4 : 0,
+    sharpe: 0,
+    drawdown: 0,
+  };
+}
+
+/** Builds the book from the live testnet account — real money, real positions. */
+function buildRealBook(quotes: Map<string, Quote>, real: RealAccount): BookSummary {
+  const positions: Position[] = real.positions.map((p) => {
+    const dir = p.side === "LONG" ? 1 : -1;
+    const pnlPct = p.entryPrice ? ((p.markPrice - p.entryPrice) / p.entryPrice) * 100 * dir : 0;
+    const changePct = quotes.get(p.symbol)?.changePct ?? 0;
+    const risk = p.entryPrice * 0.012;
+    return {
+      symbol: p.symbol,
+      side: p.side,
+      notional: p.notional,
+      entryOffset: 0,
+      bot: "AI Testnet",
+      botTh: "เอไอ (Testnet)",
+      openedMinutesAgo: 0,
+      entry: p.entryPrice,
+      price: p.markPrice,
+      stop: p.entryPrice - dir * risk,
+      target: p.entryPrice + dir * risk * 2.2,
+      pnl: p.unrealizedPnl,
+      pnlPct,
+      changePct,
+      dayPnl: (p.notional * changePct * dir) / 100,
+      size: p.size,
+      confidence: 70,
+    };
+  });
+
+  const notional = positions.reduce((a, p) => a + p.notional, 0);
+  const dayPnl = positions.reduce((a, p) => a + p.dayPnl, 0);
+  const marginUsed = Math.max(real.equity - real.available, 0);
+  const longNotional = positions.filter((p) => p.side === "LONG").reduce((a, p) => a + p.notional, 0);
+  const wins = positions.filter((p) => p.pnl > 0);
+  const gains = wins.reduce((a, p) => a + p.pnl, 0);
+  const losses = positions.filter((p) => p.pnl < 0).reduce((a, p) => a + Math.abs(p.pnl), 0);
+  const avgLev = positions.length
+    ? positions.reduce((a, p) => a + p.notional, 0) /
+      Math.max(positions.reduce((a, p) => a + p.notional / (real.positions.find((x) => x.symbol === p.symbol)?.leverage || 1), 0), 1)
+    : CONFIGURED_LEVERAGE;
+
+  return {
+    positions,
+    equity: real.equity,
+    wallet: real.wallet,
+    unrealized: real.unrealizedPnl,
+    // Testnet gives no lifetime realised figure, so total P&L is what is open.
+    realized: 0,
+    totalPnl: real.unrealizedPnl,
+    totalPnlPct: real.wallet ? (real.unrealizedPnl / real.wallet) * 100 : 0,
+    dayPnl,
+    dayPnlPct: real.equity ? (dayPnl / real.equity) * 100 : 0,
+    notional,
+    marginUsed,
+    marginRatio: real.equity ? (marginUsed / real.equity) * 100 : 0,
+    leverage: real.equity ? notional / real.equity : 0,
+    configuredLeverage: Math.round(avgLev) || CONFIGURED_LEVERAGE,
+    availableMargin: real.available,
     longShare: notional ? (longNotional / notional) * 100 : 0,
     winRate: positions.length ? (wins.length / positions.length) * 100 : 0,
     profitFactor: losses > 0 ? gains / losses : gains > 0 ? 4 : 0,

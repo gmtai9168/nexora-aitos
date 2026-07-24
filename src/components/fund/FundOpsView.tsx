@@ -14,6 +14,7 @@ import {
   treasury,
 } from "@/lib/fund";
 import { useMarket } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import { buyHoldCurve, curveStat, runRoster } from "@/lib/performance";
 import { blackSwan, committee, globalRisk, marketRisk, positionRisk } from "@/lib/risk-engine";
 import { buildBook, curveStats, equityCurve } from "@/lib/book";
@@ -35,6 +36,9 @@ const NO_CANDLES: Candle[] = [];
 
 export function FundOpsView() {
   const { symbol, quotes, candles, regime, context, exchanges, emergencyStop } = useMarket();
+  const live = useLiveAccount();
+  // Real money under management when the testnet account is connected.
+  const aum = live.connected ? live.equity : AUM_BASE;
   const [history, setHistory] = useState<{ key: string; data: Candle[] }>({
     key: "",
     data: NO_CANDLES,
@@ -73,18 +77,18 @@ export function FundOpsView() {
   const stat = useMemo(() => curveStat(portfolio), [portfolio]);
   const benchStat = useMemo(() => curveStat(buyHoldCurve(hist)), [hist]);
 
-  const alloc = useMemo(() => allocateCapital(rows, AUM_BASE, stat), [rows, stat]);
-  const investorRows = useMemo(() => investors(stat.returnPct), [stat.returnPct]);
-  const treasuryRows = useMemo(() => treasury(AUM_BASE, alloc), [alloc]);
+  const alloc = useMemo(() => allocateCapital(rows, aum, stat), [rows, stat, aum]);
+  const investorRows = useMemo(() => investors(stat.returnPct, aum), [stat.returnPct, aum]);
+  const treasuryRows = useMemo(() => treasury(aum, alloc), [alloc, aum]);
 
   const totalTrades = rows.reduce((a, r) => a + r.result.trades.length, 0);
   const rev = useMemo(
-    () => revenue(AUM_BASE, stat.returnPct, totalTrades),
-    [stat.returnPct, totalTrades],
+    () => revenue(aum, stat.returnPct, totalTrades),
+    [stat.returnPct, totalTrades, aum],
   );
 
   // Risk state is shared with the Risk Engine page so the numbers agree.
-  const book = useMemo(() => buildBook(quotes), [quotes]);
+  const book = useMemo(() => buildBook(quotes, live), [quotes, live]);
   const liveCurve = useMemo(() => equityCurve(candles, book.equity), [candles, book.equity]);
   const liveStats = useMemo(() => curveStats(liveCurve), [liveCurve]);
   const market = useMemo(
@@ -118,10 +122,10 @@ export function FundOpsView() {
     [alloc, stat, emergencyStop, exchanges, board.verdict],
   );
 
-  const projRows = useMemo(() => projections(AUM_BASE, stat), [stat]);
+  const projRows = useMemo(() => projections(aum, stat), [stat, aum]);
   const sim = useMemo(
-    () => simulateCapital(AUM_BASE, delta, alloc, stat),
-    [delta, alloc, stat],
+    () => simulateCapital(aum, delta, alloc, stat),
+    [delta, alloc, stat, aum],
   );
   const meeting = useMemo(
     () => boardMeeting(rows, alloc, stat, quotes, global.score),
@@ -135,20 +139,20 @@ export function FundOpsView() {
   const summary = useMemo(() => {
     const alpha = stat.returnPct - benchStat.returnPct;
     return (
-      `กองทุนมีสินทรัพย์ภายใต้การจัดการ ${fmtCompact(AUM_BASE)} USD จากนักลงทุน ${investorRows.length} ราย · ` +
+      `กองทุนมีสินทรัพย์ภายใต้การจัดการ ${fmtCompact(aum)} USD จากนักลงทุน ${investorRows.length} ราย · ` +
       `ผลตอบแทนของพอร์ตในช่วงที่วัด ${fmtPct(stat.returnPct)} เทียบกับการถือ ${symbol.replace("USDT", "")} เฉยๆ ที่ ${fmtPct(benchStat.returnPct)} ` +
       `คิดเป็นส่วนต่าง ${fmtPct(alpha)} ที่ Max Drawdown ${stat.maxDrawdown.toFixed(2)}% · ` +
       `AI-CIO ปล่อยทุนลงตลาด ${alloc.utilisationPct.toFixed(1)}% และถือเงินสด ${alloc.cashPct.toFixed(1)}% · ` +
       `กำไรสุทธิของบริษัทหลังหักต้นทุน ${fmtCompact(rev.net)} USD ต่อเดือน · ` +
       `การกำกับดูแลผ่าน ${passedCompliance} จาก ${complianceRows.length} ข้อ`
     );
-  }, [stat, benchStat, symbol, alloc, rev.net, investorRows.length, passedCompliance, complianceRows.length]);
+  }, [stat, benchStat, symbol, alloc, rev.net, investorRows.length, passedCompliance, complianceRows.length, aum]);
 
   const kpis = [
     {
       th: "สินทรัพย์ภายใต้การจัดการ",
       en: "AUM",
-      value: fmtCompact(AUM_BASE),
+      value: fmtCompact(aum),
       sub: `${investorRows.length} นักลงทุน`,
     },
     {
@@ -196,7 +200,7 @@ export function FundOpsView() {
   ];
 
   const ceoKpis = [
-    { th: "AUM", value: fmtCompact(AUM_BASE) },
+    { th: "AUM", value: fmtCompact(aum) },
     { th: "ผลตอบแทน", value: fmtPct(stat.returnPct), tone: stat.returnPct >= 0 ? "text-up" : "text-down" },
     { th: "Max Drawdown", value: `${stat.maxDrawdown.toFixed(2)}%` },
     { th: "เงินสด", value: `${alloc.cashPct.toFixed(1)}%` },
@@ -211,7 +215,7 @@ export function FundOpsView() {
   const exportReport = (kind: string) => {
     const payload = {
       generatedFor: "NEXORA AITOS Fund Operations",
-      aum: AUM_BASE,
+      aum: aum,
       portfolioReturnPct: Number(stat.returnPct.toFixed(4)),
       benchmarkReturnPct: Number(benchStat.returnPct.toFixed(4)),
       maxDrawdownPct: Number(stat.maxDrawdown.toFixed(4)),
@@ -258,7 +262,7 @@ export function FundOpsView() {
       <FundKpis cards={kpis} />
 
       <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <AllocationPanel alloc={alloc} aum={AUM_BASE} />
+        <AllocationPanel alloc={alloc} aum={aum} />
         <TreasuryPanel rows={treasuryRows} alloc={alloc} />
       </div>
 
@@ -277,7 +281,7 @@ export function FundOpsView() {
 
       <div className="grid gap-2.5 xl:grid-cols-2">
         <ProjectionPanel rows={projRows} />
-        <SimulatorPanel delta={delta} onDelta={setDelta} result={sim} aum={AUM_BASE} />
+        <SimulatorPanel delta={delta} onDelta={setDelta} result={sim} aum={aum} />
       </div>
 
       <BoardPanel proposals={meeting.proposals} masterPlanTh={meeting.masterPlanTh} />

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { buildBook, curveStats, equityCurve } from "@/lib/book";
 import { fmtCompact, fmtNum, fmtPct, fmtSigned } from "@/lib/format";
 import { useMarket } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import { Panel, Tag } from "./Panel";
 import { Sparkline } from "./viz";
 
@@ -44,7 +45,8 @@ function Metric({
 
 export function PortfolioOverview() {
   const { quotes, candles } = useMarket();
-  const book = useMemo(() => buildBook(quotes), [quotes]);
+  const live = useLiveAccount();
+  const book = useMemo(() => buildBook(quotes, live), [quotes, live]);
   const curve = useMemo(
     () => equityCurve(candles, book.equity),
     [candles, book.equity],

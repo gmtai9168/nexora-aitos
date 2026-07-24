@@ -14,6 +14,7 @@ import {
 import { buildBook, curveStats, equityCurve } from "@/lib/book";
 import { fmtNum, fmtPct } from "@/lib/format";
 import { useMarket } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import { stressTest } from "@/lib/portfolio-intel";
 import {
   blackSwan,
@@ -58,6 +59,7 @@ export function AutonomousView() {
     lastUpdate,
     tick,
   } = useMarket();
+  const live = useLiveAccount();
 
   const [mode, setMode] = useState<AutonomyMode>("semi");
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
@@ -92,7 +94,7 @@ export function AutonomousView() {
     };
   }, []);
 
-  const book = useMemo(() => buildBook(quotes), [quotes]);
+  const book = useMemo(() => buildBook(quotes, live), [quotes, live]);
   const curve = useMemo(() => equityCurve(candles, book.equity), [candles, book.equity]);
   const stats = useMemo(() => curveStats(curve), [curve]);
 

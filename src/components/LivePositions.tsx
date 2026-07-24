@@ -5,6 +5,7 @@ import { AGENTS } from "@/lib/agents";
 import { buildBook, type Position } from "@/lib/book";
 import { fmtCompact, fmtNum, fmtPct, fmtPrice, fmtSigned } from "@/lib/format";
 import { useMarket } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import { badgeText, findListing } from "@/lib/universe";
 import { Panel, Tag } from "./Panel";
 
@@ -38,7 +39,8 @@ function holdingLabel(minutes: number) {
 
 export function LivePositions() {
   const { quotes, prevPrices, setSymbol, emergencyStop } = useMarket();
-  const book = useMemo(() => buildBook(quotes), [quotes]);
+  const live = useLiveAccount();
+  const book = useMemo(() => buildBook(quotes, live), [quotes, live]);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   return (

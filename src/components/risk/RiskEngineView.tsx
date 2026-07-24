@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildBook, curveStats, equityCurve } from "@/lib/book";
 import { useMarket } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import { stressTest } from "@/lib/portfolio-intel";
 import {
   BAND_META,
@@ -33,6 +34,7 @@ const MATRIX_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "
 
 export function RiskEngineView() {
   const { quotes, candles, regime, context, exchanges, symbol } = useMarket();
+  const live = useLiveAccount();
   const [matrix, setMatrix] = useState<{ symbols: string[]; matrix: (number | null)[][] }>({
     symbols: [],
     matrix: [],
@@ -98,7 +100,7 @@ export function RiskEngineView() {
     };
   }, []);
 
-  const book = useMemo(() => buildBook(quotes), [quotes]);
+  const book = useMemo(() => buildBook(quotes, live), [quotes, live]);
   const curve = useMemo(() => equityCurve(candles, book.equity), [candles, book.equity]);
   const stats = useMemo(() => curveStats(curve), [curve]);
 

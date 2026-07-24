@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
 import { SystemFooter } from "@/components/SystemFooter";
 import { MarketProvider } from "@/lib/market-context";
+import { LiveAccountProvider } from "@/lib/live-account";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const thai = Noto_Sans_Thai({ variable: "--font-thai", subsets: ["thai"] });
@@ -29,12 +30,14 @@ export default function RootLayout({
         style={{ fontFamily: "var(--font-thai), var(--font-inter), sans-serif" }}
       >
         <MarketProvider>
-          <TopBar />
-          <Sidebar />
-          <div className="ml-[196px] flex min-h-[calc(100vh-70px)] flex-col">
-            <main className="flex-1 p-2.5">{children}</main>
-            <SystemFooter />
-          </div>
+          <LiveAccountProvider>
+            <TopBar />
+            <Sidebar />
+            <div className="ml-[196px] flex min-h-[calc(100vh-70px)] flex-col">
+              <main className="flex-1 p-2.5">{children}</main>
+              <SystemFooter />
+            </div>
+          </LiveAccountProvider>
         </MarketProvider>
       </body>
     </html>

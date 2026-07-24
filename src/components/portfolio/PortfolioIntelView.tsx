@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildBook, curveStats, equityCurve } from "@/lib/book";
 import { useMarket } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import {
   allocation,
   digitalTwin,
@@ -48,6 +49,7 @@ const COLORS = new Map(ALL_LISTINGS.map((l) => [l.symbol, l.color]));
 
 export function PortfolioIntelView() {
   const { quotes, candles, regime, context, exchanges, decision } = useMarket();
+  const live = useLiveAccount();
   const [matrix, setMatrix] = useState<{ symbols: string[]; matrix: (number | null)[][] }>({
     symbols: [],
     matrix: [],
@@ -80,7 +82,7 @@ export function PortfolioIntelView() {
     };
   }, []);
 
-  const book = useMemo(() => buildBook(quotes), [quotes]);
+  const book = useMemo(() => buildBook(quotes, live), [quotes, live]);
   const curve = useMemo(() => equityCurve(candles, book.equity), [candles, book.equity]);
   const stats = useMemo(() => curveStats(curve), [curve]);
   const exp = useMemo(() => exposure(book, quotes), [book, quotes]);

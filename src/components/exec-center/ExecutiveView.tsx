@@ -18,6 +18,7 @@ import {
 import { fmtCompact, fmtNum, fmtPct } from "@/lib/format";
 import { allocateCapital, investors } from "@/lib/fund";
 import { useMarket } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import { buyHoldCurve, curveStat, runRoster } from "@/lib/performance";
 import { blackSwan, globalRisk, marketRisk, positionRisk } from "@/lib/risk-engine";
 import { clusterNodes, EMPTY_HEALTH, type ServerHealth } from "@/lib/sysops";
@@ -49,6 +50,7 @@ export function ExecutiveView() {
     setEmergencyStop,
     tick,
   } = useMarket();
+  const live = useLiveAccount();
 
   const [history, setHistory] = useState<{ key: string; data: Candle[] }>({
     key: "",
@@ -116,7 +118,7 @@ export function ExecutiveView() {
   const investorRows = useMemo(() => investors(stat.returnPct), [stat.returnPct]);
   const segments = useMemo(() => investorIntelligence(investorRows), [investorRows]);
 
-  const book = useMemo(() => buildBook(quotes), [quotes]);
+  const book = useMemo(() => buildBook(quotes, live), [quotes, live]);
   const liveCurve = useMemo(() => equityCurve(candles, book.equity), [candles, book.equity]);
   const liveStats = useMemo(() => curveStats(liveCurve), [liveCurve]);
   const market = useMemo(

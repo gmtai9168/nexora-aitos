@@ -120,15 +120,22 @@ const INVESTOR_BOOK: { id: string; name: string; type: string; capital: number; 
   { id: "hnw-3", name: "Private Pool A", type: "รายย่อยรวม", capital: 9_900_789, since: "2025-09", status: "Active" },
 ];
 
-/** Investor returns are the fund return net of fees, pro-rated by capital. */
-export function investors(grossReturnPct: number): Investor[] {
+/**
+ * Investor returns are the fund return net of fees, pro-rated by capital.
+ * When a real `aum` is supplied, each investor's capital is scaled so the book
+ * sums to the actual money under management instead of the demo total.
+ */
+export function investors(grossReturnPct: number, aum = AUM_BASE): Investor[] {
+  const scale = aum / AUM_BASE;
   return INVESTOR_BOOK.map((i) => {
+    const capital = i.capital * scale;
     const perf = grossReturnPct > 0 ? grossReturnPct * (1 - PERFORMANCE_FEE_PCT / 100) : grossReturnPct;
     const net = perf - MANAGEMENT_FEE_PCT / 12;
     return {
       ...i,
+      capital,
       returnPct: net,
-      profit: (i.capital * net) / 100,
+      profit: (capital * net) / 100,
     };
   });
 }

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { AGENTS, GROUP_BY_KEY } from "@/lib/agents";
 import { buildBook } from "@/lib/book";
 import { useMarket } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import { Panel, Tag } from "../Panel";
 
 /** Each piece of Master AI's evidence is owned by the pod that produces it. */
@@ -18,7 +19,8 @@ const OWNER: Record<string, string> = {
 
 export function VotingPanel() {
   const { decision, quotes, symbol } = useMarket();
-  const book = useMemo(() => buildBook(quotes), [quotes]);
+  const live = useLiveAccount();
+  const book = useMemo(() => buildBook(quotes, live), [quotes, live]);
 
   const rows = useMemo(() => {
     if (!decision) return [];
