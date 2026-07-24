@@ -10,11 +10,36 @@
  * configured", so the app runs unchanged until the user provisions one.
  */
 
+/**
+ * Finds the store's REST credentials whatever the integration named them.
+ * Tries the well-known names first, then scans for any prefixed variant
+ * (e.g. a "STORAGE_" custom prefix) by matching the URL var to its token.
+ */
 function creds(): { url: string; token: string } | null {
-  const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  return { url: url.replace(/\/$/, ""), token };
+  const env = process.env;
+
+  const direct: [string, string][] = [
+    ["KV_REST_API_URL", "KV_REST_API_TOKEN"],
+    ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
+  ];
+  for (const [u, t] of direct) {
+    if (env[u] && env[t]) return { url: env[u]!.replace(/\/$/, ""), token: env[t]! };
+  }
+
+  for (const key of Object.keys(env)) {
+    for (const [urlSuffix, tokenSuffix] of [
+      ["KV_REST_API_URL", "KV_REST_API_TOKEN"],
+      ["REDIS_REST_URL", "REDIS_REST_TOKEN"],
+    ] as const) {
+      if (key.endsWith(urlSuffix)) {
+        const prefix = key.slice(0, key.length - urlSuffix.length);
+        const token = env[prefix + tokenSuffix];
+        if (env[key] && token) return { url: env[key]!.replace(/\/$/, ""), token };
+      }
+    }
+  }
+
+  return null;
 }
 
 export function kvConfigured(): boolean {
