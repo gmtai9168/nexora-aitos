@@ -24,6 +24,8 @@ Next.js 16 (App Router) + TypeScript + Tailwind v4 + lightweight-charts
 | 14 | System Operations | `/system-ops` | **Telemetry เซิร์ฟเวอร์จริง** · API Monitor · **AI-CTO** |
 | 15 | Executive Center | `/executive` | **Digital CEO** · Board Room · **Company Digital Twin** |
 | 16 | Backtesting Center | `/backtest` | **จำลองต้นทุนครบ** — Funding · Slippage · Liquidation · Regime · Trade Replay |
+| 17 | Trade History | `/history` | **ประวัติจากการจำลอง (PAPER)** บนราคาจริง · ตัวกรอง · Replay · AI Post-Trade · Audit |
+| 18 | Alerts Center | `/alerts` | **ตรวจจับสดทุก 20 วิ** — 15 กฎบนข้อมูลจริง · Dedup · Auto-resolve · Audit · ช่องทาง/สิทธิ์ |
 
 ## รันโปรเจกต์
 
