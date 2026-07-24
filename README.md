@@ -26,6 +26,7 @@ Next.js 16 (App Router) + TypeScript + Tailwind v4 + lightweight-charts
 | 16 | Backtesting Center | `/backtest` | **จำลองต้นทุนครบ** — Funding · Slippage · Liquidation · Regime · Trade Replay |
 | 17 | Trade History | `/history` | **ประวัติจากการจำลอง (PAPER)** บนราคาจริง · ตัวกรอง · Replay · AI Post-Trade · Audit |
 | 18 | Alerts Center | `/alerts` | **ตรวจจับสดทุก 20 วิ** — 15 กฎบนข้อมูลจริง · Dedup · Auto-resolve · Audit · ช่องทาง/สิทธิ์ |
+| 19 | Settings | `/settings` | **บันทึกจริงลง localStorage** · 12 แท็บตามสิทธิ์ · Security Score · Risk Impact · **ไม่รับ API Key** · Audit เดิม→ใหม่ |
 
 ## รันโปรเจกต์
 
