@@ -1,3 +1,4 @@
+import type { AiMemory } from "./ai-memory";
 import type { LabStrategyKind } from "./backtest-lab";
 import { TESTNET_SYMBOLS } from "./testnet";
 
@@ -47,6 +48,7 @@ export type CycleAction =
   | "hold"
   | "no_signal"
   | "low_confidence"
+  | "learned_avoid"
   | "blocked_risk"
   | "max_positions"
   | "already_open"
@@ -59,6 +61,7 @@ export const ACTION_META: Record<CycleAction, { th: string; tone: "up" | "down" 
   hold: { th: "ถือต่อ", tone: "neutral" },
   no_signal: { th: "ไม่มีสัญญาณ", tone: "neutral" },
   low_confidence: { th: "ความมั่นใจต่ำ ข้าม", tone: "warn" },
+  learned_avoid: { th: "เลี่ยงจากบทเรียนเดิม", tone: "warn" },
   blocked_risk: { th: "Risk Engine ปฏิเสธ", tone: "down" },
   max_positions: { th: "เต็มเพดานสถานะ", tone: "warn" },
   already_open: { th: "มีสถานะอยู่แล้ว", tone: "neutral" },
@@ -75,6 +78,8 @@ export type Decision = {
   qty?: number;
   pnlPct?: number;
   orderId?: number;
+  /** The bucket's learning score at decision time, when it influenced the call. */
+  learnScore?: number;
 };
 
 export type CycleReport = {
@@ -87,6 +92,8 @@ export type CycleReport = {
   closed: number;
   decisions: Decision[];
   message: string;
+  /** Learning memory after this cycle — the client persists it and sends it back. */
+  memory: AiMemory;
 };
 
 export function sanitizeConfig(c: AiTraderConfig): AiTraderConfig {

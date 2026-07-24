@@ -8,13 +8,26 @@ import {
   type AiTraderConfig,
   type CycleReport,
 } from "@/lib/ai-trader";
+import { EMPTY_MEMORY, memoryView, type AiMemory } from "@/lib/ai-memory";
 import { STRATEGY_META, type LabStrategyKind } from "@/lib/backtest-lab";
+import { REGIME_META } from "@/lib/backtest-lab";
 import { TESTNET_SYMBOLS } from "@/lib/testnet";
 import { useMarket } from "@/lib/market-context";
 import { Panel, Tag } from "../Panel";
 
 const CYCLE_MS = 60_000;
 const INTERVALS = ["1m", "5m", "15m", "1h"];
+const MEMORY_KEY = "nexora-ai-memory-v1";
+
+function loadMemory(): AiMemory {
+  if (typeof window === "undefined") return EMPTY_MEMORY;
+  try {
+    const raw = localStorage.getItem(MEMORY_KEY);
+    return raw ? (JSON.parse(raw) as AiMemory) : EMPTY_MEMORY;
+  } catch {
+    return EMPTY_MEMORY;
+  }
+}
 
 export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
   const { emergencyStop } = useMarket();
@@ -23,6 +36,8 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
   const [busy, setBusy] = useState(false); // a cycle is in flight
   const [reports, setReports] = useState<CycleReport[]>([]);
   const [nextIn, setNextIn] = useState(0);
+  // The /testnet page renders this client-side only, so localStorage is safe here.
+  const [memory, setMemory] = useState<AiMemory>(loadMemory);
 
   const set = <K extends keyof AiTraderConfig>(k: K, v: AiTraderConfig[K]) =>
     setConfig((c) => ({ ...c, [k]: v }));
@@ -37,17 +52,28 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
     async (dryRun: boolean) => {
       setBusy(true);
       try {
+        // Read the freshest memory from storage so concurrent tabs don't clobber.
+        const current = loadMemory();
         const res = await fetch("/api/testnet/ai-cycle", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ config, dryRun }),
+          body: JSON.stringify({ config, dryRun, memory: current }),
         });
         const report: CycleReport = await res.json();
         setReports((prev) => [report, ...prev].slice(0, 8));
+        // A live cycle returns the updated memory — persist it for next time.
+        if (!dryRun && report.memory) {
+          setMemory(report.memory);
+          try {
+            localStorage.setItem(MEMORY_KEY, JSON.stringify(report.memory));
+          } catch {
+            /* storage full — keep it in memory at least */
+          }
+        }
         if (!dryRun && (report.opened > 0 || report.closed > 0)) onTraded();
       } catch {
         setReports((prev) => [
-          { ok: false, ranAt: Date.now(), dryRun, balance: null, openPositions: 0, opened: 0, closed: 0, decisions: [], message: "เชื่อมต่อไม่สำเร็จ" },
+          { ok: false, ranAt: Date.now(), dryRun, balance: null, openPositions: 0, opened: 0, closed: 0, decisions: [], message: "เชื่อมต่อไม่สำเร็จ", memory: EMPTY_MEMORY },
           ...prev,
         ]);
       }
@@ -55,6 +81,16 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
     },
     [config, onTraded],
   );
+
+  const view = memoryView(memory);
+  const resetMemory = () => {
+    setMemory(EMPTY_MEMORY);
+    try {
+      localStorage.removeItem(MEMORY_KEY);
+    } catch {
+      /* non-fatal */
+    }
+  };
 
   // The live auto-loop: fires a real cycle every minute while enabled and not
   // emergency-stopped. Toggling either re-runs this effect; the cleanup cancels
@@ -250,11 +286,61 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
         </div>
       )}
 
+      {/* Learning memory */}
+      <div className="rounded border border-line-soft bg-[#0a121a]">
+        <div className="flex items-center justify-between border-b border-line-soft px-2 py-1">
+          <span className="text-[9px] font-semibold text-brand">
+            ความจำที่ AI เรียนรู้ (บันทึกไว้ในเครื่องนี้)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="num text-[9px] text-dim">
+              {memory.totalClosed} ไม้ · ชนะ {view.overallWinRate.toFixed(0)}%
+            </span>
+            {memory.totalClosed > 0 && (
+              <button type="button" onClick={resetMemory} className="rounded border border-line px-1 py-[1px] text-[8px] text-dim hover:text-txt">
+                ล้าง
+              </button>
+            )}
+          </span>
+        </div>
+        {memory.totalClosed === 0 ? (
+          <p className="px-2 py-2 text-[9px] leading-snug text-dim">
+            ยังไม่มีบทเรียน — เมื่อ AI ปิดสถานะจริงแต่ละไม้ ผลจะถูกบันทึกตาม (กลยุทธ์ × เหรียญ × สภาวะตลาด)
+            แล้วนำมาใช้ตัดสินใจครั้งต่อไป bucket ที่ขาดทุนซ้ำจะถูกเลี่ยง ที่ทำกำไรจะได้เปิดก่อน
+          </p>
+        ) : (
+          <ul className="max-h-[160px] overflow-y-auto">
+            {view.buckets.slice(0, 12).map((b) => (
+              <li key={b.key} className="flex items-center gap-1.5 border-b border-line-soft px-2 py-[3px] text-[9px] last:border-0">
+                <span className="w-[44px] shrink-0 text-txt">{b.symbol.replace("USDT", "")}</span>
+                <span className="w-[64px] shrink-0 truncate text-muted">
+                  {REGIME_META[b.regime as keyof typeof REGIME_META]?.th ?? b.regime}
+                </span>
+                <span className="num w-[64px] shrink-0 text-dim">{b.trades} ไม้ · {b.winRate.toFixed(0)}%</span>
+                <span className={`num w-[54px] shrink-0 text-right ${b.pnlSum >= 0 ? "text-up" : "text-down"}`}>
+                  {b.pnlSum >= 0 ? "+" : ""}{b.pnlSum.toFixed(1)}
+                </span>
+                <span className="flex-1" />
+                <span
+                  className={`num shrink-0 rounded px-1 text-[8px] ${
+                    b.score > 15 ? "bg-[#0d2b23] text-up" : b.score < -15 ? "bg-[#2c1119] text-down" : "bg-[#111e28] text-dim"
+                  }`}
+                  title="คะแนนบทเรียน −100…+100"
+                >
+                  {b.trades < 4 ? "เก็บข้อมูล" : `${b.score >= 0 ? "+" : ""}${b.score.toFixed(0)}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <p className="text-[8.5px] leading-snug text-dim">
         AI อ่านแท่งเทียนจริงทุกรอบ (ทุก {CYCLE_MS / 1000} วินาทีเมื่อเปิดอัตโนมัติ) → สร้างสัญญาณด้วยกลยุทธ์เดียวกับ Backtest →
-        ผ่าน Risk Engine → ส่งคำสั่งไปยัง Testnet · ปิดสถานะเมื่อกำไร/ขาดทุนบนมาร์จินถึงเกณฑ์ TP/SL ·
-        <strong className="text-warn"> เป็นเงินปลอมทั้งหมด</strong> · ปุ่ม EMERGENCY STOP แถบซ้ายหยุดได้ทันที ·
-        AI ทำงานเฉพาะขณะเปิดหน้านี้ไว้ (การทำงาน 24 ชม.แม้ปิดหน้าต้องใช้ Vercel Cron แผน Pro)
+        <strong className="text-brand"> เทียบกับความจำที่เรียนรู้มา</strong> (เลี่ยง bucket ที่เคยขาดทุน ให้ bucket ที่ทำกำไรก่อน) →
+        ผ่าน Risk Engine → ส่งคำสั่งไปยัง Testnet · ปิดสถานะเมื่อถึงเกณฑ์ TP/SL แล้ว<strong className="text-brand">บันทึกผลลงความจำ</strong> ·
+        <strong className="text-warn"> เงินปลอมทั้งหมด</strong> · EMERGENCY STOP หยุดได้ทันที ·
+        ความจำเก็บในเบราว์เซอร์นี้ (อยู่รอดข้ามรอบและ reload) · AI ทำงานเฉพาะขณะเปิดหน้านี้ไว้
       </p>
     </Panel>
   );
