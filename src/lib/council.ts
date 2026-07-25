@@ -211,8 +211,14 @@ export function runCouncil(f: Features, weightOf: (id: string) => number = () =>
     else if (v.vote < -0.12) against++;
   }
   const score = W ? net / W : 0;
-  const dir = score > 0.12 ? "LONG" : score < -0.12 ? "SHORT" : null;
-  const confidence = Math.round(clamp(50 + Math.abs(score) * 46, 0, 97));
+  const dir = score > 0.1 ? "LONG" : score < -0.1 ? "SHORT" : null;
+
+  // Confidence maps the weighted net onto a usable 50–97 scale. The net is an
+  // average over ~25 diverse votes, so a genuine consensus lands around 0.15–0.4;
+  // a breadth bonus rewards a lopsided council even when magnitudes are modest.
+  const decided = supporting + against;
+  const breadth = decided ? Math.abs(supporting - against) / decided : 0; // 0..1
+  const confidence = Math.round(clamp(50 + Math.abs(score) * 90 + breadth * 8, 0, 97));
 
   return { dir, confidence, supporting, against, net: score, votes };
 }

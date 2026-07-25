@@ -41,7 +41,8 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   riskPct: 2,
   leverage: 5,
   maxPositions: 3,
-  minConfidence: 62,
+  // Tuned to the council's confidence scale — a genuine consensus clears this.
+  minConfidence: 60,
   takeProfitPct: 30,
   stopLossPct: 15,
   deepMode: true,
