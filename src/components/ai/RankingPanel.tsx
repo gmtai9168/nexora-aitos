@@ -25,6 +25,8 @@ export function RankingPanel({
           profit: t.profitPct,
           trust: trustScore(t),
           live: move !== null,
+          real: t.real,
+          samples: t.samples,
           color: GROUP_BY_KEY.get(a.group)?.color ?? "#6b8497",
         };
       })
@@ -65,6 +67,11 @@ export function RankingPanel({
                 <span className="block truncate text-[11px]">{r.agent.name}</span>
                 <span className="block truncate text-[9px] text-dim">
                   {r.agent.nameTh}
+                  {r.real ? (
+                    <span className="ml-1 text-brand">· ผลจริง {r.samples} ครั้ง</span>
+                  ) : (
+                    <span className="ml-1 text-dim">· สาธิต</span>
+                  )}
                   {r.live && <span className="ml-1 text-up">· LIVE</span>}
                 </span>
               </span>
@@ -94,9 +101,9 @@ export function RankingPanel({
         ))}
       </ol>
       <p className="border-t border-line-soft px-3 py-1.5 text-[9px] text-dim">
-        Trust Score = ความแม่นยำ 26% · ผลตอบแทนจริง 24% · Max Drawdown 18% ·
-        ความเสถียร 14% · ความสดของโมเดล 10% · คุณภาพข้อมูล 8%
-        — Master AI ให้น้ำหนัก AI ที่คะแนนสูงกว่ามากขึ้น
+        ความแม่นยำมาจากผลเทรดจริงเมื่อ AI ตัวนั้นถูกให้คะแนนสะสม (ก่อนหน้านั้นเป็นค่าสาธิต) ·
+        Trust = ความแม่น 26% · ผลตอบแทนจริง 24% · Max DD 18% · เสถียร 14% · ความสดโมเดล 10% ·
+        คุณภาพข้อมูล 8% — Master AI ให้น้ำหนักตัวที่คะแนนสูงมากขึ้น
       </p>
     </Panel>
   );

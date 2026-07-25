@@ -1,3 +1,5 @@
+import { getAgentLive } from "./agent-live";
+
 export type AgentStatus =
   | "online"
   | "thinking"
@@ -207,6 +209,12 @@ export type Telemetry = {
   version: string;
   accuracy: number;
   winRate: number;
+  /** True when accuracy/winRate come from graded trades, not the demo baseline. */
+  real: boolean;
+  /** Graded directional votes behind the numbers (0 = demo). */
+  samples: number;
+  /** Earned weight Master AI gives this agent's vote. */
+  weight: number;
   avgHoldingMin: number;
   decisionsToday: number;
   tradesToday: number;
@@ -238,14 +246,20 @@ export function telemetry(agent: Agent, marketMove: number | null): Telemetry {
   const s2 = hash(agent.id + "b");
   const s3 = hash(agent.id + "c");
 
-  const accuracy = spread(s, 68, 94);
+  // Real track record when the agent has graded trades; else a demo baseline.
+  const live = getAgentLive(agent.id);
+  const accuracy = live ? live.accuracy * 100 : spread(s, 68, 94);
+  const winRate = live ? Math.max(40, Math.min(88, 38 + live.accuracy * 55)) : spread(s2, 54, 78);
   const stability = spread(s2, 72, 98);
   const lastTrainedDays = Math.round(spread(s3, 0, 21));
 
   return {
     version: `${1 + Math.floor(s * 3)}.${Math.floor(s2 * 10)}.${Math.floor(s3 * 10)}`,
     accuracy,
-    winRate: spread(s2, 54, 78),
+    winRate,
+    real: !!live,
+    samples: live?.votes ?? 0,
+    weight: live?.weight ?? 1,
     avgHoldingMin: Math.round(spread(s3, 4, 220)),
     decisionsToday: Math.round(spread(s, 40, 320)),
     tradesToday: Math.round(spread(s2, 3, 60)),

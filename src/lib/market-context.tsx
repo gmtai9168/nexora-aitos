@@ -13,6 +13,7 @@ import { decide, EMPTY_CONTEXT, type Evidence, type MarketContext, type MasterDe
 import type { Candle, Quote } from "./types";
 import { CRYPTO, HEADER_SYMBOLS } from "./universe";
 import { TESTNET_SYMBOLS } from "./testnet";
+import { setAgentLive, type AgentPerf } from "./agent-live";
 
 /** Live council read from /api/council — the same 50-agent brain the trader uses. */
 export type CouncilAgent = {
@@ -268,6 +269,19 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     }
   }, [symbol]);
 
+  // Real per-agent track record from the trading memory — fills the registry
+  // the pure telemetry()/trustScore() functions read across every page.
+  const pullAgentsPerf = useCallback(async () => {
+    try {
+      const res = await fetch("/api/agents-perf");
+      if (!res.ok) return;
+      const data = (await res.json()) as { perf: Record<string, AgentPerf> };
+      setAgentLive(data.perf ?? {});
+    } catch {
+      /* keep last known performance */
+    }
+  }, []);
+
   const pullExchanges = useCallback(async () => {
     try {
       const res = await fetch("/api/exchanges");
@@ -283,6 +297,7 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   usePoll(pullCandles, SUB_MINUTE.has(timeframe) ? 4000 : 20000);
   usePoll(pullContext, 25000);
   usePoll(pullCouncil, 20000);
+  usePoll(pullAgentsPerf, 30000);
   usePoll(pullExchanges, 45000);
 
   const candles = candleState.key === candleKey ? candleState.candles : NO_CANDLES;
