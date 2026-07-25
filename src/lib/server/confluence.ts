@@ -1,0 +1,217 @@
+import { ema } from "../analytics";
+import { klines } from "./binance-testnet";
+
+/**
+ * Deep-analysis layer: the broader, real market context behind a trade.
+ *
+ * The technical signal only reads price. This adds the data the platform
+ * already tracks but the trader ignored — futures funding, open-interest
+ * trend, aggressive taker flow, crowd positioning, market sentiment, and
+ * higher-timeframe trend. Each factor either confirms or contradicts the
+ * signal's direction, and the net becomes a bounded confidence adjustment.
+ *
+ * It is honest about weight: no single factor here is a money-printer, so the
+ * whole layer moves confidence by at most ~±35 points and never overrides a
+ * missing technical signal. It makes decisions broader, not magically right.
+ */
+
+const FAPI = "https://fapi.binance.com";
+
+async function j<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(7000) });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Market-wide sentiment — fetched once per cycle
+ * ------------------------------------------------------------------ */
+
+export async function fearGreed(): Promise<number | null> {
+  const d = await j<{ data: { value: string }[] }>("https://api.alternative.me/fng/?limit=1");
+  const v = d?.data?.[0]?.value;
+  return v ? Number(v) : null;
+}
+
+/* ------------------------------------------------------------------ *
+ * Per-symbol futures microstructure (real mainnet data)
+ * ------------------------------------------------------------------ */
+
+type Premium = { lastFundingRate: string };
+type OiPoint = { sumOpenInterest: string };
+type Ratio = { longShortRatio?: string; buySellRatio?: string; longAccount?: string };
+
+export type MarketDepth = {
+  funding: number | null; // %
+  oiChangePct: number | null; // over the window
+  takerBuyShare: number | null; // %
+  longShare: number | null; // % of accounts long
+};
+
+export async function marketDepth(symbol: string): Promise<MarketDepth> {
+  const [prem, oi, lsr, taker] = await Promise.all([
+    j<Premium>(`${FAPI}/fapi/v1/premiumIndex?symbol=${symbol}`),
+    j<OiPoint[]>(`${FAPI}/futures/data/openInterestHist?symbol=${symbol}&period=5m&limit=13`),
+    j<Ratio[]>(`${FAPI}/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`),
+    j<Ratio[]>(`${FAPI}/futures/data/takerlongshortRatio?symbol=${symbol}&period=5m&limit=1`),
+  ]);
+
+  let oiChangePct: number | null = null;
+  if (oi && oi.length >= 2) {
+    const now = Number(oi.at(-1)!.sumOpenInterest);
+    const then = Number(oi[0].sumOpenInterest);
+    oiChangePct = then ? ((now - then) / then) * 100 : null;
+  }
+
+  let takerBuyShare: number | null = null;
+  const bsr = taker?.[0]?.buySellRatio ? Number(taker[0].buySellRatio) : null;
+  if (bsr && bsr > 0) takerBuyShare = (bsr / (1 + bsr)) * 100;
+
+  return {
+    funding: prem ? Number(prem.lastFundingRate) * 100 : null,
+    oiChangePct,
+    takerBuyShare,
+    longShare: lsr?.[0]?.longAccount ? Number(lsr[0].longAccount) * 100 : null,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Higher-timeframe trend, from the same feed we execute on
+ * ------------------------------------------------------------------ */
+
+const HIGHER_TF: Record<string, string> = {
+  "1m": "15m",
+  "5m": "1h",
+  "15m": "4h",
+  "1h": "4h",
+  "4h": "1d",
+};
+
+/** +1 uptrend, −1 downtrend, 0 flat on the timeframe above `interval`. */
+export async function higherTrend(symbol: string, interval: string): Promise<number> {
+  const tf = HIGHER_TF[interval] ?? "1h";
+  const kl = await klines(symbol, tf, 120);
+  if (!kl.ok || kl.data.length < 40) return 0;
+  const closes = kl.data.map((c) => c.close);
+  const fast = ema(closes, 12).at(-1)!;
+  const slow = ema(closes, 34).at(-1)!;
+  if (!slow) return 0;
+  const slope = ((fast - slow) / slow) * 100;
+  return slope > 0.1 ? 1 : slope < -0.1 ? -1 : 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Scoring
+ * ------------------------------------------------------------------ */
+
+export type DeepFactor = { label: string; agree: boolean | null; note: string };
+
+export type DeepResult = {
+  /** Confidence adjustment in points, bounded to about ±35. */
+  adj: number;
+  factors: DeepFactor[];
+  /** Short human summary of the strongest agreeing/disagreeing forces. */
+  summary: string;
+};
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+export function scoreDeep(
+  dir: "LONG" | "SHORT",
+  depth: MarketDepth,
+  fng: number | null,
+  hiTrend: number,
+): DeepResult {
+  const long = dir === "LONG";
+  const factors: DeepFactor[] = [];
+  let adj = 0;
+
+  // Higher-timeframe trend — the heaviest factor: don't fight the bigger trend.
+  if (hiTrend !== 0) {
+    const agree = (hiTrend > 0) === long;
+    const w = agree ? 12 : -22;
+    adj += w;
+    factors.push({
+      label: "เทรนด์ไทม์เฟรมใหญ่",
+      agree,
+      note: agree ? "ไปทางเดียวกับเทรนด์ใหญ่" : "สวนเทรนด์ใหญ่ (เสี่ยง)",
+    });
+  }
+
+  // Aggressive taker flow — who is hitting the book right now.
+  if (depth.takerBuyShare !== null) {
+    const buyBias = depth.takerBuyShare - 50; // + = buyers aggressive
+    const aligned = long ? buyBias : -buyBias;
+    adj += clamp(aligned * 0.5, -10, 10);
+    factors.push({
+      label: "แรงเคาะซื้อ/ขาย",
+      agree: aligned > 3 ? true : aligned < -3 ? false : null,
+      note: `ฝั่งซื้อ ${depth.takerBuyShare.toFixed(0)}%`,
+    });
+  }
+
+  // Open interest — rising OI in the trade's direction means fresh conviction.
+  if (depth.oiChangePct !== null && Math.abs(depth.oiChangePct) > 1) {
+    const rising = depth.oiChangePct > 0;
+    // Fresh money confirms only when flow agrees; otherwise it is neutral.
+    const flowAgrees = depth.takerBuyShare !== null && (long ? depth.takerBuyShare > 50 : depth.takerBuyShare < 50);
+    if (rising && flowAgrees) {
+      adj += 5;
+      factors.push({ label: "สัญญาคงค้าง (OI)", agree: true, note: `เพิ่ม ${depth.oiChangePct.toFixed(1)}% พร้อมแรงหนุน` });
+    } else if (!rising) {
+      factors.push({ label: "สัญญาคงค้าง (OI)", agree: null, note: `ลด ${depth.oiChangePct.toFixed(1)}% (สถานะถูกปิด)` });
+    }
+  }
+
+  // Crowded positioning — an over-one-sided crowd is a contrarian caution.
+  if (depth.longShare !== null && (depth.longShare > 62 || depth.longShare < 38)) {
+    const crowdedLong = depth.longShare > 50;
+    const against = crowdedLong === long; // entering with an already-crowded side
+    adj += against ? -6 : 4;
+    factors.push({
+      label: "ฝูงชนในตลาด",
+      agree: !against,
+      note: `บัญชีฝั่งซื้อ ${depth.longShare.toFixed(0)}%${against ? " — แออัดฝั่งเดียวกับเรา" : ""}`,
+    });
+  }
+
+  // Funding at an extreme — the crowded side pays, a mild contrarian nudge.
+  if (depth.funding !== null && Math.abs(depth.funding) > 0.03) {
+    const longsPay = depth.funding > 0;
+    const against = longsPay === long;
+    adj += against ? -4 : 3;
+    factors.push({
+      label: "Funding Rate",
+      agree: !against,
+      note: `${depth.funding.toFixed(4)}%${against ? " — ฝั่งเราเป็นคนจ่าย" : ""}`,
+    });
+  }
+
+  // Sentiment extreme — contrarian at the tails only.
+  if (fng !== null && (fng <= 25 || fng >= 75)) {
+    const greed = fng >= 75;
+    const favoursLong = !greed; // extreme fear favours longs, greed favours shorts
+    const agree = favoursLong === long;
+    adj += agree ? 4 : -4;
+    factors.push({
+      label: "อารมณ์ตลาด",
+      agree,
+      note: `ดัชนี ${fng} (${greed ? "โลภสุด" : "กลัวสุด"})`,
+    });
+  }
+
+  adj = clamp(adj, -35, 35);
+
+  const agreed = factors.filter((f) => f.agree === true);
+  const against = factors.filter((f) => f.agree === false);
+  const summary =
+    factors.length === 0
+      ? "ไม่มีข้อมูลเชิงลึกเพิ่มเติมในรอบนี้"
+      : `${agreed.length} ปัจจัยหนุน · ${against.length} ปัจจัยค้าน → ปรับความมั่นใจ ${adj >= 0 ? "+" : ""}${adj.toFixed(0)}`;
+
+  return { adj, factors, summary };
+}

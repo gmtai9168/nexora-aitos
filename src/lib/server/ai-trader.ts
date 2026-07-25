@@ -8,6 +8,7 @@ import {
   type AiMemory,
   type OpenContext,
 } from "../ai-memory";
+import { fearGreed, higherTrend, marketDepth, scoreDeep, type DeepFactor } from "./confluence";
 import { riskCheck, type OrderIntent } from "../testnet";
 import {
   sanitizeConfig,
@@ -135,8 +136,22 @@ export async function runCycle(
   }
 
   // 2) Entries — gather candidates, let the memory gate and rank them.
-  type Candidate = { symbol: string; dir: "LONG" | "SHORT"; confidence: number; reason: string; regime: string; price: number; score: number };
+  type Candidate = {
+    symbol: string;
+    dir: "LONG" | "SHORT";
+    baseConfidence: number;
+    confidence: number;
+    reason: string;
+    regime: string;
+    price: number;
+    score: number;
+    deepAdj: number;
+    deepFactors: DeepFactor[];
+  };
   const candidates: Candidate[] = [];
+
+  // Market-wide sentiment is fetched once and shared across candidates.
+  const fng = config.deepMode ? await fearGreed() : null;
 
   for (const symbol of config.symbols) {
     if (held.has(symbol)) {
@@ -152,10 +167,6 @@ export async function runCycle(
     const signal = latestSignal(kl.data, config.strategy);
     if (!signal) {
       decisions.push({ symbol, action: "no_signal", detail: "โมเดลไม่ให้สัญญาณที่แท่งล่าสุด" });
-      continue;
-    }
-    if (signal.confidence < config.minConfidence) {
-      decisions.push({ symbol, action: "low_confidence", side: signal.dir, confidence: signal.confidence, detail: `ความมั่นใจ ${signal.confidence}% < เกณฑ์ ${config.minConfidence}%` });
       continue;
     }
 
@@ -175,7 +186,43 @@ export async function runCycle(
       continue;
     }
 
-    candidates.push({ symbol, dir: signal.dir, confidence: signal.confidence, reason: signal.reason, regime: signal.regime, price: kl.data.at(-1)!.close, score });
+    // Deep-confluence layer: pull the broader market context and adjust
+    // confidence by how much it agrees with the technical signal.
+    let deepAdj = 0;
+    let deepFactors: DeepFactor[] = [];
+    if (config.deepMode) {
+      const [depth, hiTrend] = await Promise.all([marketDepth(symbol), higherTrend(symbol, config.interval)]);
+      const deep = scoreDeep(signal.dir, depth, fng, hiTrend);
+      deepAdj = deep.adj;
+      deepFactors = deep.factors;
+    }
+    const confidence = Math.max(0, Math.min(99, Math.round(signal.confidence + deepAdj)));
+
+    if (confidence < config.minConfidence) {
+      decisions.push({
+        symbol,
+        action: "low_confidence",
+        side: signal.dir,
+        confidence,
+        deepAdj,
+        deepFactors,
+        detail: `ความมั่นใจรวม ${confidence}% (เทคนิค ${signal.confidence}% ${deepAdj >= 0 ? "+" : ""}${deepAdj} เชิงลึก) < เกณฑ์ ${config.minConfidence}%`,
+      });
+      continue;
+    }
+
+    candidates.push({
+      symbol,
+      dir: signal.dir,
+      baseConfidence: signal.confidence,
+      confidence,
+      reason: signal.reason,
+      regime: signal.regime,
+      price: kl.data.at(-1)!.close,
+      score,
+      deepAdj,
+      deepFactors,
+    });
   }
 
   // Best track record first, then highest confidence — scarce slots go to what has worked.
@@ -204,6 +251,7 @@ export async function runCycle(
     }
 
     const learnNote = c.score > 15 ? ` · บทเรียนดี (+${c.score.toFixed(0)})` : c.score < -15 ? ` · บทเรียนเสี่ยง (${c.score.toFixed(0)})` : "";
+    const deepNote = c.deepAdj !== 0 ? ` · เชิงลึก ${c.deepAdj >= 0 ? "+" : ""}${c.deepAdj}` : "";
 
     if (!dryRun) {
       const lev = await setLeverage(c.symbol, config.leverage);
@@ -220,11 +268,11 @@ export async function runCycle(
       memory = { ...memory, open: { ...memory.open, [c.symbol]: ctx } };
       opened++;
       held.set(c.symbol, {} as PositionRaw);
-      decisions.push({ symbol: c.symbol, action: "opened", side: c.dir, confidence: c.confidence, learnScore: c.score, detail: `${c.reason} · ${c.regime}${learnNote}`, price: c.price, qty, orderId: res.data.orderId });
+      decisions.push({ symbol: c.symbol, action: "opened", side: c.dir, confidence: c.confidence, learnScore: c.score, deepAdj: c.deepAdj, deepFactors: c.deepFactors, detail: `${c.reason} · ${c.regime}${learnNote}${deepNote}`, price: c.price, qty, orderId: res.data.orderId });
     } else {
       opened++;
       held.set(c.symbol, {} as PositionRaw);
-      decisions.push({ symbol: c.symbol, action: "opened", side: c.dir, confidence: c.confidence, learnScore: c.score, detail: `(จำลอง) ${c.reason}${learnNote} · มูลค่า ${verdict.notionalUsd.toFixed(0)} USDT`, price: c.price, qty });
+      decisions.push({ symbol: c.symbol, action: "opened", side: c.dir, confidence: c.confidence, learnScore: c.score, deepAdj: c.deepAdj, deepFactors: c.deepFactors, detail: `(จำลอง) ${c.reason}${learnNote}${deepNote} · มูลค่า ${verdict.notionalUsd.toFixed(0)} USDT`, price: c.price, qty });
     }
   }
 

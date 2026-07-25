@@ -20,6 +20,8 @@ export type AiTraderConfig = {
   /** Close a position once its return on margin reaches ±these. */
   takeProfitPct: number;
   stopLossPct: number;
+  /** Run the deep-confluence layer (funding, OI, flow, sentiment, higher TF). */
+  deepMode: boolean;
 };
 
 export const DEFAULT_AI_CONFIG: AiTraderConfig = {
@@ -32,6 +34,7 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   minConfidence: 62,
   takeProfitPct: 30,
   stopLossPct: 15,
+  deepMode: true,
 };
 
 /** Hard ceilings the engine clamps the config to, whatever the UI sends. */
@@ -80,6 +83,10 @@ export type Decision = {
   orderId?: number;
   /** The bucket's learning score at decision time, when it influenced the call. */
   learnScore?: number;
+  /** Deep-confluence confidence adjustment, when the layer ran. */
+  deepAdj?: number;
+  /** Factors the deep layer weighed, for the decision log. */
+  deepFactors?: { label: string; agree: boolean | null; note: string }[];
 };
 
 export type CycleReport = {

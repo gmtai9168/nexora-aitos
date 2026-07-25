@@ -3,7 +3,7 @@ import { type AiMemory } from "@/lib/ai-memory";
 import { cycleWithMemory, clearMemory } from "@/lib/server/ai-orchestrator";
 import { kvConfigured } from "@/lib/server/kv";
 
-export const maxDuration = 40;
+export const maxDuration = 60;
 
 /**
  * Run one autonomous decision cycle from the browser.

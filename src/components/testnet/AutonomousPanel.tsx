@@ -236,6 +236,27 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
         </div>
       </div>
 
+      {/* Deep-confluence toggle */}
+      <button
+        type="button"
+        onClick={() => set("deepMode", !config.deepMode)}
+        className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-left transition-colors ${
+          config.deepMode ? "border-brand/50 bg-[#062a38]" : "border-line bg-[#0a121a]"
+        }`}
+      >
+        <span className="min-w-0">
+          <span className={`block text-[10.5px] font-semibold ${config.deepMode ? "text-brand" : "text-txt"}`}>
+            วิเคราะห์เชิงลึก (Deep Confluence)
+          </span>
+          <span className="block text-[8.5px] text-dim">
+            Funding · OI · แรงซื้อขาย · Long/Short · Fear&amp;Greed · ไทม์เฟรมใหญ่
+          </span>
+        </span>
+        <span className={`shrink-0 rounded px-1.5 py-[2px] text-[9px] ${config.deepMode ? "bg-up text-black" : "bg-[#1d2f3c] text-dim"}`}>
+          {config.deepMode ? "เปิด" : "ปิด"}
+        </span>
+      </button>
+
       <div className="grid grid-cols-3 gap-2">
         {[
           { k: "riskPct" as const, l: "เสี่ยง/ไม้ %", min: 0.5, max: AI_LIMITS.maxRiskPct, step: 0.5 },
@@ -321,14 +342,31 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
               const m = ACTION_META[d.action];
               const tone = m.tone === "up" ? "text-up" : m.tone === "down" ? "text-down" : m.tone === "warn" ? "text-warn" : "text-muted";
               return (
-                <li key={i} className="flex items-start gap-1.5 border-b border-line-soft px-2 py-1 text-[9.5px] last:border-0">
-                  <span className="w-[52px] shrink-0 text-txt">{d.symbol.replace("USDT", "")}</span>
-                  <span className={`w-[92px] shrink-0 ${tone}`}>
-                    {d.side && <span className="mr-1">{d.side === "LONG" ? "▲" : "▼"}</span>}
-                    {m.th}
-                  </span>
-                  <span className="min-w-0 flex-1 text-dim">{d.detail}</span>
-                  {d.confidence !== undefined && <span className="num shrink-0 text-brand">{d.confidence}%</span>}
+                <li key={i} className="border-b border-line-soft px-2 py-1 last:border-0">
+                  <div className="flex items-start gap-1.5 text-[9.5px]">
+                    <span className="w-[52px] shrink-0 text-txt">{d.symbol.replace("USDT", "")}</span>
+                    <span className={`w-[92px] shrink-0 ${tone}`}>
+                      {d.side && <span className="mr-1">{d.side === "LONG" ? "▲" : "▼"}</span>}
+                      {m.th}
+                    </span>
+                    <span className="min-w-0 flex-1 text-dim">{d.detail}</span>
+                    {d.confidence !== undefined && <span className="num shrink-0 text-brand">{d.confidence}%</span>}
+                  </div>
+                  {d.deepFactors && d.deepFactors.length > 0 && (
+                    <div className="mt-[2px] flex flex-wrap gap-1 pl-[52px]">
+                      {d.deepFactors.map((f, j) => (
+                        <span
+                          key={j}
+                          title={f.note}
+                          className={`rounded px-1 py-[1px] text-[8px] ${
+                            f.agree === true ? "bg-[#0d2b23] text-up" : f.agree === false ? "bg-[#2c1119] text-down" : "bg-[#111e28] text-dim"
+                          }`}
+                        >
+                          {f.agree === true ? "✓" : f.agree === false ? "✕" : "·"} {f.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </li>
               );
             })}
