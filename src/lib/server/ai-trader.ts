@@ -193,7 +193,7 @@ export async function runCycle(
     if (config.deepMode) {
       const [depth, hiTrend] = await Promise.all([marketDepth(symbol), higherTrend(symbol, config.interval)]);
       const deep = scoreDeep(signal.dir, depth, fng, hiTrend);
-      deepAdj = deep.adj;
+      deepAdj = Math.round(deep.adj);
       deepFactors = deep.factors;
     }
     const confidence = Math.max(0, Math.min(99, Math.round(signal.confidence + deepAdj)));
