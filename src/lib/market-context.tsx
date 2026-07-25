@@ -9,9 +9,73 @@ import {
   useState,
 } from "react";
 import { detectRegime, readSignal, type Regime, type SignalRead } from "./analytics";
-import { decide, EMPTY_CONTEXT, type MarketContext, type MasterDecision } from "./decision";
+import { decide, EMPTY_CONTEXT, type Evidence, type MarketContext, type MasterDecision } from "./decision";
 import type { Candle, Quote } from "./types";
 import { CRYPTO, HEADER_SYMBOLS } from "./universe";
+import { TESTNET_SYMBOLS } from "./testnet";
+
+/** Live council read from /api/council — the same 50-agent brain the trader uses. */
+export type CouncilAgent = {
+  id: string;
+  name: string;
+  nameTh: string;
+  kind: "direction" | "monitor";
+  vote: number;
+  confidence: number;
+  note: string;
+  ok: boolean | null;
+  weight: number;
+};
+export type CouncilData = {
+  symbol: string;
+  ranAt: number;
+  master: { dir: "LONG" | "SHORT" | null; confidence: number; supporting: number; against: number; net: number };
+  deep: boolean;
+  pods: { key: string; th: string; en: string; color: string; agents: CouncilAgent[] }[];
+};
+
+/**
+ * Folds the live 50-agent council over the local price-level plan so every
+ * page's Master AI verdict, confidence, and evidence come from the same brain
+ * the autonomous trader uses. Price levels (entry/stop/target) stay from the
+ * candle read, re-aimed to the council's direction.
+ */
+function mergeCouncil(base: MasterDecision, c: CouncilData): MasterDecision {
+  const agents = c.pods.flatMap((p) => p.agents).filter((a) => a.kind === "direction" && Math.abs(a.vote) >= 0.12);
+  const evidence: Evidence[] = agents
+    .sort((a, b) => Math.abs(b.vote) - Math.abs(a.vote))
+    .slice(0, 10)
+    .map((a) => ({
+      key: a.id,
+      th: a.nameTh,
+      en: a.name,
+      verdict: a.vote > 0 ? "Long" : "Short",
+      vote: a.vote > 0 ? 1 : -1,
+      detail: a.note,
+    }));
+
+  const action: MasterDecision["action"] = c.master.dir ?? "WAIT";
+  const stopDist = base.entry ? Math.abs(base.entry - base.stop) / base.entry : 0.005;
+  const dir = action === "SHORT" ? -1 : 1;
+  const entry = base.entry;
+  const stop = action === "WAIT" ? base.stop : entry * (1 - dir * stopDist);
+  const target = action === "WAIT" ? base.target : entry * (1 + dir * stopDist * base.riskReward);
+
+  return {
+    ...base,
+    action,
+    confidence: c.master.confidence,
+    supporting: c.master.supporting,
+    against: c.master.against,
+    evidence,
+    stop,
+    target,
+    summaryTh:
+      action === "WAIT"
+        ? `คณะ AI 50 ตัวยังไม่มีมติชัดเจน (${c.master.supporting} หนุน / ${c.master.against} ค้าน)`
+        : `คณะ AI 50 ตัวชี้ ${action} — ${c.master.supporting} หนุน / ${c.master.against} ค้าน${c.deep ? " · ข่าว AI" : ""}`,
+  };
+}
 
 export const TIMEFRAMES = [
   "1s",
@@ -56,6 +120,8 @@ type MarketState = {
   signal: SignalRead;
   context: MarketContext;
   decision: MasterDecision | null;
+  /** Full live council (50 agents + weights) for the current symbol, when supported. */
+  council: CouncilData | null;
   exchanges: ExchangeHealth[];
   connected: boolean;
   lastUpdate: number;
@@ -130,6 +196,10 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     key: "",
     ctx: EMPTY_CONTEXT,
   });
+  const [councilState, setCouncilState] = useState<{ key: string; data: CouncilData | null }>({
+    key: "",
+    data: null,
+  });
 
   const candleKey = `${symbol}|${timeframe}`;
 
@@ -184,6 +254,20 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     }
   }, [symbol]);
 
+  const pullCouncil = useCallback(async () => {
+    if (!TESTNET_SYMBOLS.includes(symbol)) {
+      setCouncilState({ key: symbol, data: null });
+      return;
+    }
+    try {
+      const res = await fetch(`/api/council?symbol=${encodeURIComponent(symbol)}`);
+      if (!res.ok) throw new Error(String(res.status));
+      setCouncilState({ key: symbol, data: (await res.json()) as CouncilData });
+    } catch {
+      setCouncilState({ key: symbol, data: null });
+    }
+  }, [symbol]);
+
   const pullExchanges = useCallback(async () => {
     try {
       const res = await fetch("/api/exchanges");
@@ -198,18 +282,21 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   usePoll(pullMovers, 30000);
   usePoll(pullCandles, SUB_MINUTE.has(timeframe) ? 4000 : 20000);
   usePoll(pullContext, 25000);
+  usePoll(pullCouncil, 20000);
   usePoll(pullExchanges, 45000);
 
   const candles = candleState.key === candleKey ? candleState.candles : NO_CANDLES;
   const candlesLoading = candleState.key !== candleKey;
   const context = ctxState.key === symbol ? ctxState.ctx : EMPTY_CONTEXT;
+  const council = councilState.key === symbol ? councilState.data : null;
 
   const regime = useMemo(() => detectRegime(candles), [candles]);
   const signal = useMemo(() => readSignal(candles, regime), [candles, regime]);
-  const decision = useMemo(
-    () => decide(symbol, candles, regime, context),
-    [symbol, candles, regime, context],
-  );
+  const decision = useMemo(() => {
+    const base = decide(symbol, candles, regime, context);
+    if (!base) return null;
+    return council && council.master ? mergeCouncil(base, council) : base;
+  }, [symbol, candles, regime, context, council]);
 
   const value = useMemo<MarketState>(
     () => ({
@@ -226,6 +313,7 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
       signal,
       context,
       decision,
+      council,
       exchanges,
       connected,
       lastUpdate,
@@ -244,6 +332,7 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
       signal,
       context,
       decision,
+      council,
       exchanges,
       connected,
       lastUpdate,

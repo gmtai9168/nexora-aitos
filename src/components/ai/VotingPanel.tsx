@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { AGENTS, GROUP_BY_KEY } from "@/lib/agents";
+import { AGENTS, AGENT_BY_ID, GROUP_BY_KEY } from "@/lib/agents";
 import { buildBook } from "@/lib/book";
 import { useMarket } from "@/lib/market-context";
 import { useLiveAccount } from "@/lib/live-account";
@@ -26,7 +26,8 @@ export function VotingPanel() {
     if (!decision) return [];
 
     const base = decision.evidence.map((e) => {
-      const agent = AGENTS.find((a) => a.id === OWNER[e.key]);
+      // Council evidence is keyed by agent id; the legacy 6-key read maps via OWNER.
+      const agent = AGENT_BY_ID.get(e.key) ?? AGENTS.find((a) => a.id === OWNER[e.key]);
       const group = agent ? GROUP_BY_KEY.get(agent.group) : undefined;
       return {
         id: e.key,
