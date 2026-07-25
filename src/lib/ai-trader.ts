@@ -40,11 +40,13 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
   riskPct: 2,
   leverage: 5,
-  maxPositions: 3,
+  maxPositions: 8,
   // Tuned to the council's confidence scale — a genuine consensus clears this.
   minConfidence: 60,
-  takeProfitPct: 30,
-  stopLossPct: 15,
+  // Tighter than before so trades close and cycle faster — more graded outcomes
+  // per hour = faster learning. At 5x these are ~3% / 2% price moves.
+  takeProfitPct: 15,
+  stopLossPct: 10,
   deepMode: true,
   // On by default in the FREE keyword tier: while ANTHROPIC_API_KEY is unset,
   // headlines are read with keyword scoring only — no LLM call, zero cost.
@@ -65,7 +67,7 @@ export const AI_LIMITS = {
   // Raised so the AI can hold positions across many of the 24 coins at once
   // (broader data collection). Each still uses riskPct margin, so total exposure
   // scales with the count — keep an eye on used margin.
-  maxPositionsCeiling: 12,
+  maxPositionsCeiling: 20,
   maxRiskPct: 10,
 };
 
