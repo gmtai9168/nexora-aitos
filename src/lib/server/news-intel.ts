@@ -40,6 +40,18 @@ const ASSET: Record<string, { code: string; name: string }> = {
   DOTUSDT: { code: "DOT", name: "Polkadot" },
   LTCUSDT: { code: "LTC", name: "Litecoin" },
   TRXUSDT: { code: "TRX", name: "TRON" },
+  BCHUSDT: { code: "BCH", name: "Bitcoin Cash" },
+  ETCUSDT: { code: "ETC", name: "Ethereum Classic" },
+  XLMUSDT: { code: "XLM", name: "Stellar" },
+  ATOMUSDT: { code: "ATOM", name: "Cosmos" },
+  NEARUSDT: { code: "NEAR", name: "NEAR Protocol" },
+  UNIUSDT: { code: "UNI", name: "Uniswap" },
+  FILUSDT: { code: "FIL", name: "Filecoin" },
+  APTUSDT: { code: "APT", name: "Aptos" },
+  ARBUSDT: { code: "ARB", name: "Arbitrum" },
+  OPUSDT: { code: "OP", name: "Optimism" },
+  INJUSDT: { code: "INJ", name: "Injective" },
+  AAVEUSDT: { code: "AAVE", name: "Aave" },
 };
 
 export type NewsBias = "bullish" | "bearish" | "neutral";

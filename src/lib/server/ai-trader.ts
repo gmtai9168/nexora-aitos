@@ -183,22 +183,24 @@ export async function runCycle(
   }
   const macroBlocked = Boolean(macro?.lockout);
 
-  for (const symbol of config.symbols) {
-    if (macroBlocked) break;
+  // Per-symbol analysis is independent (reads shared state, writes nothing), so
+  // it runs in bounded-parallel batches — many coins stay within the time limit.
+  const analyseSymbol = async (symbol: string): Promise<{ decisions: Decision[]; candidate?: Candidate }> => {
+    const out: Decision[] = [];
     if (held.has(symbol)) {
-      decisions.push({ symbol, action: "already_open", detail: "มีสถานะอยู่แล้ว ข้ามการเปิดใหม่" });
-      continue;
+      out.push({ symbol, action: "already_open", detail: "มีสถานะอยู่แล้ว ข้ามการเปิดใหม่" });
+      return { decisions: out };
     }
 
     const kl = await klines(symbol, config.interval, 300);
     if (!kl.ok || kl.data.length < 150) {
-      decisions.push({ symbol, action: "error", detail: "ข้อมูลแท่งเทียนไม่พอ" });
-      continue;
+      out.push({ symbol, action: "error", detail: "ข้อมูลแท่งเทียนไม่พอ" });
+      return { decisions: out };
     }
     const signal = latestSignal(kl.data, config.strategy);
     if (!signal) {
-      decisions.push({ symbol, action: "no_signal", detail: "โมเดลไม่ให้สัญญาณที่แท่งล่าสุด" });
-      continue;
+      out.push({ symbol, action: "no_signal", detail: "โมเดลไม่ให้สัญญาณที่แท่งล่าสุด" });
+      return { decisions: out };
     }
 
     const key = bucketKey(config.strategy, symbol, signal.regime);
@@ -206,7 +208,7 @@ export async function runCycle(
     const score = learningScore(stat);
 
     if (shouldAvoid(stat)) {
-      decisions.push({
+      out.push({
         symbol,
         action: "learned_avoid",
         side: signal.dir,
@@ -214,20 +216,20 @@ export async function runCycle(
         learnScore: score,
         detail: `เคยเทรด ${stat!.trades} ครั้งในสภาวะ "${signal.regime}" ชนะ ${((stat!.wins / stat!.trades) * 100).toFixed(0)}% รวมขาดทุน — AI เลือกเลี่ยง`,
       });
-      continue;
+      return { decisions: out };
     }
 
     // News read once — feeds the council's News agent and drives the lockout.
     const newsRead = config.newsMode ? await newsIntel(symbol) : null;
     if (newsRead && config.newsLockout && scoreNews(signal.dir, newsRead).lockout) {
-      decisions.push({
+      out.push({
         symbol,
         action: "news_lockout",
         side: signal.dir,
         confidence: signal.confidence,
         detail: `งดเปิดสถานะ — ${newsRead.reason || newsRead.headline}`,
       });
-      continue;
+      return { decisions: out };
     }
 
     // The decision. With the Council on, all 50 agents vote and Master AI reads
@@ -257,8 +259,8 @@ export async function runCycle(
       const c = runCouncil(feats, (id) => agentWeight(memory, id));
 
       if (!c.dir) {
-        decisions.push({ symbol, action: "low_confidence", confidence: c.confidence, detail: `คณะ AI ไม่มีมติชัดเจน (${c.supporting} หนุน / ${c.against} ค้าน)` });
-        continue;
+        out.push({ symbol, action: "low_confidence", confidence: c.confidence, detail: `คณะ AI ไม่มีมติชัดเจน (${c.supporting} หนุน / ${c.against} ค้าน)` });
+        return { decisions: out };
       }
       dir = c.dir;
       confidence = c.confidence;
@@ -276,7 +278,7 @@ export async function runCycle(
     }
 
     if (confidence < config.minConfidence) {
-      decisions.push({
+      out.push({
         symbol,
         action: "low_confidence",
         side: dir,
@@ -285,22 +287,25 @@ export async function runCycle(
         deepFactors,
         detail: `ความมั่นใจ ${confidence}% < เกณฑ์ ${config.minConfidence}%`,
       });
-      continue;
+      return { decisions: out };
     }
 
-    candidates.push({
-      symbol,
-      dir,
-      baseConfidence: signal.confidence,
-      confidence,
-      reason,
-      regime: signal.regime,
-      votes,
-      price: kl.data.at(-1)!.close,
-      score,
-      deepAdj,
-      deepFactors,
-    });
+    return {
+      decisions: out,
+      candidate: { symbol, dir, baseConfidence: signal.confidence, confidence, reason, regime: signal.regime, votes, price: kl.data.at(-1)!.close, score, deepAdj, deepFactors },
+    };
+  };
+
+  if (!macroBlocked) {
+    const CONCURRENCY = 4; // bounds the burst of exchange requests per batch
+    for (let i = 0; i < config.symbols.length; i += CONCURRENCY) {
+      const batch = config.symbols.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(analyseSymbol));
+      for (const r of results) {
+        decisions.push(...r.decisions);
+        if (r.candidate) candidates.push(r.candidate);
+      }
+    }
   }
 
   // Best track record first, then highest confidence — scarce slots go to what has worked.

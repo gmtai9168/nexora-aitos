@@ -35,6 +35,18 @@ export const TESTNET_SYMBOLS = [
   "DOTUSDT",
   "LTCUSDT",
   "TRXUSDT",
+  "BCHUSDT",
+  "ETCUSDT",
+  "XLMUSDT",
+  "ATOMUSDT",
+  "NEARUSDT",
+  "UNIUSDT",
+  "FILUSDT",
+  "APTUSDT",
+  "ARBUSDT",
+  "OPUSDT",
+  "INJUSDT",
+  "AAVEUSDT",
 ];
 
 /** Caps enforced before any order reaches the exchange. Testnet money, real gate. */
