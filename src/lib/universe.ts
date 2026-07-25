@@ -44,6 +44,9 @@ export const CRYPTO: Listing[] = [
   ["SUIUSDT", "SUI/USDT", "Sui", "#4da2ff"],
   ["FILUSDT", "FIL/USDT", "Filecoin", "#0090ff"],
   ["ETCUSDT", "ETC/USDT", "Ethereum Classic", "#3ab83a"],
+  ["BCHUSDT", "BCH/USDT", "Bitcoin Cash", "#8dc351"],
+  ["XLMUSDT", "XLM/USDT", "Stellar", "#14b6e7"],
+  ["AAVEUSDT", "AAVE/USDT", "Aave", "#b6509e"],
 ].map(([symbol, display, name, color]) => ({
   symbol,
   display,
