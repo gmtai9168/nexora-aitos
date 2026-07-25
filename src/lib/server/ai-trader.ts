@@ -17,7 +17,7 @@ import { upcomingMacro, minutesTo } from "./econ-calendar";
 import { buildFeatures } from "./features";
 import { runCouncil } from "../council";
 import { AGENT_BY_ID } from "../agents";
-import { riskCheck, type OrderIntent } from "../testnet";
+import { riskCheck, roundTripFee, type OrderIntent } from "../testnet";
 import {
   sanitizeConfig,
   type AiTraderConfig,
@@ -85,7 +85,9 @@ export async function runCycle(
     const amt = Number(p.positionAmt);
     const notional = Math.abs(amt) * Number(p.markPrice);
     const margin = notional / Math.max(Number(p.leverage), 1);
-    const pnl = Number(p.unRealizedProfit);
+    // Net of the estimated round-trip fee — the P&L the AI actually keeps, so it
+    // learns real profitability and doesn't treat a fee-eaten scalp as a win.
+    const pnl = Number(p.unRealizedProfit) - roundTripFee(notional);
     const pnlPct = margin ? (pnl / margin) * 100 : 0;
     const side = amt > 0 ? "LONG" : "SHORT";
 

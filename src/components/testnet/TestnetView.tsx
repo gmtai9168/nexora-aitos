@@ -274,23 +274,28 @@ function BalancePanel({ balance, error, connected }: { balance: Balance | null; 
       ) : error ? (
         <p className="py-4 text-center text-[10.5px] text-down">{error}</p>
       ) : balance ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {[
-            { l: "ยอดกระเป๋า", v: balance.walletBalance, tone: "text-txt" },
-            { l: "ยอดใช้ได้", v: balance.availableBalance, tone: "text-txt" },
-            { l: "มาร์จินรวม", v: balance.marginBalance, tone: "text-txt" },
-            { l: "กำไร/ขาดทุนค้าง", v: balance.unrealizedPnl, tone: balance.unrealizedPnl >= 0 ? "text-up" : "text-down" },
-          ].map((x) => (
-            <div key={x.l} className="rounded border border-line-soft bg-[#0a121a] px-2 py-1.5">
-              <div className="truncate text-[9px] text-muted">{x.l}</div>
-              <div className={`num truncate text-[15px] font-bold ${x.tone}`}>
-                {x.v >= 0 ? "" : "−"}
-                {fmtNum(Math.abs(x.v))}
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { l: "ยอดกระเป๋า", v: balance.walletBalance, tone: "text-txt" },
+              { l: "ยอดใช้ได้", v: balance.availableBalance, tone: "text-txt" },
+              { l: "มาร์จินรวม (หลังฟี)", v: balance.marginBalance, tone: "text-txt" },
+              { l: "กำไร/ขาดทุน (หลังฟี)", v: balance.unrealizedPnl, tone: balance.unrealizedPnl >= 0 ? "text-up" : "text-down" },
+            ].map((x) => (
+              <div key={x.l} className="rounded border border-line-soft bg-[#0a121a] px-2 py-1.5">
+                <div className="truncate text-[9px] text-muted">{x.l}</div>
+                <div className={`num truncate text-[15px] font-bold ${x.tone}`}>
+                  {x.v >= 0 ? "" : "−"}
+                  {fmtNum(Math.abs(x.v))}
+                </div>
+                <div className="text-[8px] text-dim">USDT (ปลอม)</div>
               </div>
-              <div className="text-[8px] text-dim">USDT (ปลอม)</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[8.5px] text-dim">
+            P&amp;L และมาร์จินหักค่าธรรมเนียมโดยประมาณแล้ว (ไป-กลับ ~0.08% ของมูลค่าสถานะ) · AI เรียนรู้จากกำไรสุทธิหลังฟี
+          </p>
+        </>
       ) : (
         <p className="py-4 text-center text-[10.5px] text-dim">กำลังโหลด…</p>
       )}

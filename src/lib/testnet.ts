@@ -56,6 +56,14 @@ export const RISK_LIMITS = {
   minNotionalUsd: 5, // Binance futures minimum
 };
 
+/** Binance USDⓈ-M futures taker fee (VIP0). Both entry and exit are takers here. */
+export const TAKER_FEE = 0.0004;
+
+/** Estimated round-trip fee (entry + exit) in USDT for a given position notional. */
+export function roundTripFee(notionalUsd: number): number {
+  return Math.abs(notionalUsd) * TAKER_FEE * 2;
+}
+
 export type RiskVerdict = {
   ok: boolean;
   notionalUsd: number;
