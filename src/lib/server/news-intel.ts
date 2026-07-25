@@ -33,6 +33,13 @@ const ASSET: Record<string, { code: string; name: string }> = {
   SOLUSDT: { code: "SOL", name: "Solana" },
   BNBUSDT: { code: "BNB", name: "BNB" },
   XRPUSDT: { code: "XRP", name: "XRP" },
+  ADAUSDT: { code: "ADA", name: "Cardano" },
+  DOGEUSDT: { code: "DOGE", name: "Dogecoin" },
+  AVAXUSDT: { code: "AVAX", name: "Avalanche" },
+  LINKUSDT: { code: "LINK", name: "Chainlink" },
+  DOTUSDT: { code: "DOT", name: "Polkadot" },
+  LTCUSDT: { code: "LTC", name: "Litecoin" },
+  TRXUSDT: { code: "TRX", name: "TRON" },
 };
 
 export type NewsBias = "bullish" | "bearish" | "neutral";

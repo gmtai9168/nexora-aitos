@@ -16,8 +16,26 @@ export type OrderIntent = {
   reduceOnly: boolean;
 };
 
-/** Symbols the desk allows on testnet — an allow-list, not a block-list. */
-export const TESTNET_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"];
+/**
+ * Symbols the desk allows on testnet — an allow-list, not a block-list.
+ * Curated to liquid majors that exist on Binance Futures Testnet and have the
+ * futures microstructure the council reads. Add more here to widen coverage;
+ * the exchange + risk gate reject anything the testnet doesn't actually list.
+ */
+export const TESTNET_SYMBOLS = [
+  "BTCUSDT",
+  "ETHUSDT",
+  "SOLUSDT",
+  "BNBUSDT",
+  "XRPUSDT",
+  "ADAUSDT",
+  "DOGEUSDT",
+  "AVAXUSDT",
+  "LINKUSDT",
+  "DOTUSDT",
+  "LTCUSDT",
+  "TRXUSDT",
+];
 
 /** Caps enforced before any order reaches the exchange. Testnet money, real gate. */
 export const RISK_LIMITS = {
