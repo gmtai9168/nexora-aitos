@@ -62,7 +62,10 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
 /** Hard ceilings the engine clamps the config to, whatever the UI sends. */
 export const AI_LIMITS = {
   maxLeverage: 20,
-  maxPositionsCeiling: 5,
+  // Raised so the AI can hold positions across many of the 24 coins at once
+  // (broader data collection). Each still uses riskPct margin, so total exposure
+  // scales with the count — keep an eye on used margin.
+  maxPositionsCeiling: 12,
   maxRiskPct: 10,
 };
 
