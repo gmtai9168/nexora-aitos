@@ -45,19 +45,34 @@ type Premium = { lastFundingRate: string };
 type OiPoint = { sumOpenInterest: string };
 type Ratio = { longShortRatio?: string; buySellRatio?: string; longAccount?: string };
 
+type Depth = { bids: [string, string][]; asks: [string, string][] };
+
 export type MarketDepth = {
   funding: number | null; // %
   oiChangePct: number | null; // over the window
   takerBuyShare: number | null; // %
   longShare: number | null; // % of accounts long
+  /** Resting-order pressure near mid: + = bids heavier (buy wall), − = asks. */
+  obImbalance: number | null; // %
 };
 
+/** #2 Order-book imbalance from the live futures depth (free, real-time). */
+function imbalance(d: Depth | null): number | null {
+  if (!d || !d.bids?.length || !d.asks?.length) return null;
+  const notional = (rows: [string, string][]) => rows.reduce((s, [p, q]) => s + Number(p) * Number(q), 0);
+  const bid = notional(d.bids);
+  const ask = notional(d.asks);
+  const tot = bid + ask;
+  return tot ? ((bid - ask) / tot) * 100 : null;
+}
+
 export async function marketDepth(symbol: string): Promise<MarketDepth> {
-  const [prem, oi, lsr, taker] = await Promise.all([
+  const [prem, oi, lsr, taker, book] = await Promise.all([
     j<Premium>(`${FAPI}/fapi/v1/premiumIndex?symbol=${symbol}`),
     j<OiPoint[]>(`${FAPI}/futures/data/openInterestHist?symbol=${symbol}&period=5m&limit=13`),
     j<Ratio[]>(`${FAPI}/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`),
     j<Ratio[]>(`${FAPI}/futures/data/takerlongshortRatio?symbol=${symbol}&period=5m&limit=1`),
+    j<Depth>(`${FAPI}/fapi/v1/depth?symbol=${symbol}&limit=100`),
   ]);
 
   let oiChangePct: number | null = null;
@@ -76,7 +91,26 @@ export async function marketDepth(symbol: string): Promise<MarketDepth> {
     oiChangePct,
     takerBuyShare,
     longShare: lsr?.[0]?.longAccount ? Number(lsr[0].longAccount) * 100 : null,
+    obImbalance: imbalance(book),
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * #3 Implied volatility — Deribit DVOL (free, no key). BTC/ETH only.
+ * ------------------------------------------------------------------ */
+
+/** Annualized implied-vol index (~40–60 typical BTC); null for assets without DVOL. */
+export async function impliedVol(symbol: string): Promise<number | null> {
+  const cur = symbol.startsWith("BTC") ? "BTC" : symbol.startsWith("ETH") ? "ETH" : null;
+  if (!cur) return null;
+  const now = Date.now();
+  const d = await j<{ result?: { data?: number[][] } }>(
+    `https://www.deribit.com/api/v2/public/get_volatility_index_data?currency=${cur}&start_timestamp=${now - 6 * 3600 * 1000}&end_timestamp=${now}&resolution=3600`,
+  );
+  const rows = d?.result?.data;
+  if (!rows || rows.length === 0) return null;
+  const close = rows.at(-1)![4]; // [ts, open, high, low, close]
+  return Number.isFinite(close) ? close : null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -125,6 +159,7 @@ export function scoreDeep(
   depth: MarketDepth,
   fng: number | null,
   hiTrend: number,
+  iv: number | null = null,
 ): DeepResult {
   const long = dir === "LONG";
   const factors: DeepFactor[] = [];
@@ -140,6 +175,30 @@ export function scoreDeep(
       agree,
       note: agree ? "ไปทางเดียวกับเทรนด์ใหญ่" : "สวนเทรนด์ใหญ่ (เสี่ยง)",
     });
+  }
+
+  // Order-book imbalance — resting buy/sell walls near mid right now.
+  if (depth.obImbalance !== null && Math.abs(depth.obImbalance) > 12) {
+    const bidHeavy = depth.obImbalance > 0;
+    const aligned = bidHeavy === long;
+    adj += clamp((long ? depth.obImbalance : -depth.obImbalance) * 0.25, -8, 8);
+    factors.push({
+      label: "สมดุลคำสั่งในบุ๊ก",
+      agree: aligned,
+      note: `${bidHeavy ? "กำแพงซื้อ" : "กำแพงขาย"}หนากว่า ${Math.abs(depth.obImbalance).toFixed(0)}%`,
+    });
+  }
+
+  // Implied volatility (DVOL) — how big a move the options market is pricing.
+  // High IV makes a short-timeframe entry riskier both ways; a small caution.
+  if (iv !== null) {
+    if (iv >= 70) {
+      adj -= 4;
+      factors.push({ label: "ความผันผวนคาดการณ์", agree: false, note: `สูง (DVOL ${iv.toFixed(0)}) — ตลาดคาดเหวี่ยงแรง` });
+    } else if (iv <= 35) {
+      adj += 2;
+      factors.push({ label: "ความผันผวนคาดการณ์", agree: true, note: `ต่ำ (DVOL ${iv.toFixed(0)}) — ตลาดค่อนข้างนิ่ง` });
+    }
   }
 
   // Aggressive taker flow — who is hitting the book right now.

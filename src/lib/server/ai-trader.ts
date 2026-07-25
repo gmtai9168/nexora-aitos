@@ -8,7 +8,10 @@ import {
   type AiMemory,
   type OpenContext,
 } from "../ai-memory";
-import { fearGreed, higherTrend, marketDepth, scoreDeep, type DeepFactor } from "./confluence";
+import { fearGreed, higherTrend, impliedVol, marketDepth, scoreDeep, type DeepFactor } from "./confluence";
+import { newsIntel, scoreNews } from "./news-intel";
+import { upcomingMacro, minutesTo } from "./econ-calendar";
+import { onchainFlow, scoreOnchain } from "./onchain";
 import { riskCheck, type OrderIntent } from "../testnet";
 import {
   sanitizeConfig,
@@ -153,7 +156,18 @@ export async function runCycle(
   // Market-wide sentiment is fetched once and shared across candidates.
   const fng = config.deepMode ? await fearGreed() : null;
 
+  // Scheduled-event lockout is market-wide: check once, keep the trader out of
+  // the minutes around a known high-impact catalyst (expiry, CPI, FOMC).
+  const macro = config.macroLockout ? await upcomingMacro(ranAt) : null;
+  if (macro?.lockout && macro.event) {
+    const mins = minutesTo(macro.event, ranAt);
+    const when = mins >= 0 ? `อีก ${mins} นาที` : `ผ่านมา ${-mins} นาที`;
+    decisions.push({ symbol: "ตลาด", action: "macro_lockout", detail: `งดเปิดสถานะรอบนี้ — ${macro.event.label} (${when})` });
+  }
+  const macroBlocked = Boolean(macro?.lockout);
+
   for (const symbol of config.symbols) {
+    if (macroBlocked) break;
     if (held.has(symbol)) {
       decisions.push({ symbol, action: "already_open", detail: "มีสถานะอยู่แล้ว ข้ามการเปิดใหม่" });
       continue;
@@ -186,16 +200,49 @@ export async function runCycle(
       continue;
     }
 
-    // Deep-confluence layer: pull the broader market context and adjust
-    // confidence by how much it agrees with the technical signal.
+    // Deep-confluence + news layers run concurrently, then fold into confidence.
+    // Deep reads the market's microstructure; news reads the headlines. Both are
+    // bounded adjustments, and the news layer can also veto the entry outright.
     let deepAdj = 0;
     let deepFactors: DeepFactor[] = [];
-    if (config.deepMode) {
-      const [depth, hiTrend] = await Promise.all([marketDepth(symbol), higherTrend(symbol, config.interval)]);
-      const deep = scoreDeep(signal.dir, depth, fng, hiTrend);
-      deepAdj = Math.round(deep.adj);
-      deepFactors = deep.factors;
+
+    const [deep, news, onchain] = await Promise.all([
+      config.deepMode
+        ? Promise.all([marketDepth(symbol), higherTrend(symbol, config.interval), impliedVol(symbol)]).then(
+            ([depth, hiTrend, iv]) => scoreDeep(signal.dir, depth, fng, hiTrend, iv),
+          )
+        : Promise.resolve(null),
+      config.newsMode ? newsIntel(symbol).then((intel) => ({ ...scoreNews(signal.dir, intel), intel })) : Promise.resolve(null),
+      // Dormant unless a paid provider key is set; returns null otherwise.
+      config.onchainMode ? onchainFlow(symbol).then((flow) => (flow ? { ...scoreOnchain(signal.dir, flow), flow } : null)) : Promise.resolve(null),
+    ]);
+
+    if (deep) {
+      deepAdj += Math.round(deep.adj);
+      deepFactors = [...deepFactors, ...deep.factors];
     }
+
+    if (onchain) {
+      deepAdj += onchain.adj;
+      deepFactors = [...deepFactors, onchain.factor];
+    }
+
+    if (news) {
+      deepFactors = [...deepFactors, news.factor];
+      if (config.newsLockout && news.lockout) {
+        decisions.push({
+          symbol,
+          action: "news_lockout",
+          side: signal.dir,
+          confidence: signal.confidence,
+          deepFactors,
+          detail: `งดเปิดสถานะ — ${news.intel.reason || news.intel.headline}`,
+        });
+        continue;
+      }
+      deepAdj += news.adj;
+    }
+
     const confidence = Math.max(0, Math.min(99, Math.round(signal.confidence + deepAdj)));
 
     if (confidence < config.minConfidence) {

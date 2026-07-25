@@ -83,6 +83,16 @@ export async function kvSetJson(key: string, value: unknown): Promise<boolean> {
   return res === "OK";
 }
 
+/**
+ * Like kvSetJson but with a time-to-live in seconds. Used to cache expensive
+ * work (e.g. an LLM news read) so a burst of cycles reuses one result instead
+ * of paying per call.
+ */
+export async function kvSetJsonEx(key: string, value: unknown, ttlSec: number): Promise<boolean> {
+  const res = await command<string>(["SET", key, JSON.stringify(value), "EX", Math.max(1, Math.round(ttlSec))]);
+  return res === "OK";
+}
+
 /** A cheap round-trip to confirm the store answers. */
 export async function kvPing(): Promise<boolean> {
   const res = await command<string>(["PING"]);

@@ -257,6 +257,91 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
         </span>
       </button>
 
+      {/* News toggle — LLM read when ANTHROPIC_API_KEY is set, else keyword */}
+      <button
+        type="button"
+        onClick={() => set("newsMode", !config.newsMode)}
+        className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-left transition-colors ${
+          config.newsMode ? "border-brand/50 bg-[#062a38]" : "border-line bg-[#0a121a]"
+        }`}
+      >
+        <span className="min-w-0">
+          <span className={`block text-[10.5px] font-semibold ${config.newsMode ? "text-brand" : "text-txt"}`}>
+            ข่าวเชิงลึก (News AI)
+          </span>
+          <span className="block text-[8.5px] text-dim">
+            AI อ่านข่าวจริงต่อเหรียญ (ต้องมี ANTHROPIC_API_KEY · ไม่งั้นใช้คีย์เวิร์ด)
+          </span>
+        </span>
+        <span className={`shrink-0 rounded px-1.5 py-[2px] text-[9px] ${config.newsMode ? "bg-up text-black" : "bg-[#1d2f3c] text-dim"}`}>
+          {config.newsMode ? "เปิด" : "ปิด"}
+        </span>
+      </button>
+
+      {/* News lockout — sit out imminent high-impact events */}
+      <button
+        type="button"
+        onClick={() => set("newsLockout", !config.newsLockout)}
+        disabled={!config.newsMode}
+        className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-left transition-colors disabled:opacity-40 ${
+          config.newsLockout && config.newsMode ? "border-warn/50 bg-[#2a1f06]" : "border-line bg-[#0a121a]"
+        }`}
+      >
+        <span className="min-w-0">
+          <span className={`block text-[10.5px] font-semibold ${config.newsLockout && config.newsMode ? "text-warn" : "text-txt"}`}>
+            งดเทรดช่วงข่าวแรง (News Lockout)
+          </span>
+          <span className="block text-[8.5px] text-dim">
+            หยุดเปิดสถานะเมื่อ AI พบข่าวแรงใกล้เข้า (CPI · FOMC · ETF · hack)
+          </span>
+        </span>
+        <span className={`shrink-0 rounded px-1.5 py-[2px] text-[9px] ${config.newsLockout && config.newsMode ? "bg-warn text-black" : "bg-[#1d2f3c] text-dim"}`}>
+          {config.newsLockout ? "เปิด" : "ปิด"}
+        </span>
+      </button>
+
+      {/* Macro lockout — free scheduled-event guard (expiry always; CPI/FOMC with FINNHUB_TOKEN) */}
+      <button
+        type="button"
+        onClick={() => set("macroLockout", !config.macroLockout)}
+        className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-left transition-colors ${
+          config.macroLockout ? "border-warn/50 bg-[#2a1f06]" : "border-line bg-[#0a121a]"
+        }`}
+      >
+        <span className="min-w-0">
+          <span className={`block text-[10.5px] font-semibold ${config.macroLockout ? "text-warn" : "text-txt"}`}>
+            ล็อกช่วงเหตุการณ์สำคัญ (ฟรี)
+          </span>
+          <span className="block text-[8.5px] text-dim">
+            งดเปิดสถานะรอบวันหมดอายุออปชั่น · CPI/FOMC (เมื่อมี FINNHUB_TOKEN)
+          </span>
+        </span>
+        <span className={`shrink-0 rounded px-1.5 py-[2px] text-[9px] ${config.macroLockout ? "bg-warn text-black" : "bg-[#1d2f3c] text-dim"}`}>
+          {config.macroLockout ? "เปิด" : "ปิด"}
+        </span>
+      </button>
+
+      {/* On-chain — scaffold, dormant until a paid provider key is set at real-money launch */}
+      <button
+        type="button"
+        onClick={() => set("onchainMode", !config.onchainMode)}
+        className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-left transition-colors ${
+          config.onchainMode ? "border-brand/50 bg-[#062a38]" : "border-line bg-[#0a121a]"
+        }`}
+      >
+        <span className="min-w-0">
+          <span className={`block text-[10.5px] font-semibold ${config.onchainMode ? "text-brand" : "text-txt"}`}>
+            กระแสเงินออนเชน (รอเงินจริง)
+          </span>
+          <span className="block text-[8.5px] text-dim">
+            พร้อมใช้เมื่อใส่ GLASSNODE_API_KEY / NANSEN_API_KEY (ค่าบริการสูง) — ยังไม่ทำงานจนกว่าจะมีคีย์
+          </span>
+        </span>
+        <span className={`shrink-0 rounded px-1.5 py-[2px] text-[9px] ${config.onchainMode ? "bg-up text-black" : "bg-[#1d2f3c] text-dim"}`}>
+          {config.onchainMode ? "เปิด" : "ปิด"}
+        </span>
+      </button>
+
       <div className="grid grid-cols-3 gap-2">
         {[
           { k: "riskPct" as const, l: "เสี่ยง/ไม้ %", min: 0.5, max: AI_LIMITS.maxRiskPct, step: 0.5 },

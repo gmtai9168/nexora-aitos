@@ -22,6 +22,14 @@ export type AiTraderConfig = {
   stopLossPct: number;
   /** Run the deep-confluence layer (funding, OI, flow, sentiment, higher TF). */
   deepMode: boolean;
+  /** Read the news flow (LLM when ANTHROPIC_API_KEY is set, else keyword) as a factor. */
+  newsMode: boolean;
+  /** Skip opening when the news layer flags an imminent high-impact event. */
+  newsLockout: boolean;
+  /** Skip opening around scheduled high-impact events (expiry, CPI, FOMC). Free. */
+  macroLockout: boolean;
+  /** On-chain exchange-flow factor — dormant until a paid provider key is set. */
+  onchainMode: boolean;
 };
 
 export const DEFAULT_AI_CONFIG: AiTraderConfig = {
@@ -35,6 +43,16 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   takeProfitPct: 30,
   stopLossPct: 15,
   deepMode: true,
+  // On by default in the FREE keyword tier: while ANTHROPIC_API_KEY is unset,
+  // headlines are read with keyword scoring only — no LLM call, zero cost.
+  // ⚠ The moment ANTHROPIC_API_KEY is set, this auto-upgrades to the paid AI
+  // tier (per-read cost). Turn the panel toggle off first if that's unwanted.
+  newsMode: true,
+  newsLockout: true,
+  // Free scheduled-event lockout (options expiry always; CPI/FOMC when FINNHUB_TOKEN set).
+  macroLockout: true,
+  // Dormant scaffold — needs GLASSNODE_API_KEY / NANSEN_API_KEY at real-money launch.
+  onchainMode: false,
 };
 
 /** Hard ceilings the engine clamps the config to, whatever the UI sends. */
@@ -52,6 +70,8 @@ export type CycleAction =
   | "no_signal"
   | "low_confidence"
   | "learned_avoid"
+  | "news_lockout"
+  | "macro_lockout"
   | "blocked_risk"
   | "max_positions"
   | "already_open"
@@ -65,6 +85,8 @@ export const ACTION_META: Record<CycleAction, { th: string; tone: "up" | "down" 
   no_signal: { th: "ไม่มีสัญญาณ", tone: "neutral" },
   low_confidence: { th: "ความมั่นใจต่ำ ข้าม", tone: "warn" },
   learned_avoid: { th: "เลี่ยงจากบทเรียนเดิม", tone: "warn" },
+  news_lockout: { th: "ล็อกจากข่าวแรง", tone: "warn" },
+  macro_lockout: { th: "ล็อกช่วงเหตุการณ์สำคัญ", tone: "warn" },
   blocked_risk: { th: "Risk Engine ปฏิเสธ", tone: "down" },
   max_positions: { th: "เต็มเพดานสถานะ", tone: "warn" },
   already_open: { th: "มีสถานะอยู่แล้ว", tone: "neutral" },
