@@ -16,6 +16,7 @@ import {
 } from "@/lib/testnet";
 import { Panel, Tag } from "../Panel";
 import { AutonomousPanel } from "./AutonomousPanel";
+import { CouncilPanel } from "./CouncilPanel";
 
 const POLL_MS = 8000;
 
@@ -184,6 +185,7 @@ export function TestnetView() {
             <BalancePanel balance={balance} error={accountError} connected={!!connected} />
             <PositionsPanel positions={positions} />
             <OrdersPanel orders={orders} onCancel={cancel} />
+            <CouncilPanel />
           </div>
 
           <div className="flex flex-col gap-2.5">

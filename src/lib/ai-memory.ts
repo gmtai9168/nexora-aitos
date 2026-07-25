@@ -26,13 +26,24 @@ export type OpenContext = {
   openedAt: number;
   /** Last unrealised P&L seen while open — the fallback outcome on an external close. */
   lastPnl: number;
+  /** Direction taken, for crediting the council on close. */
+  dir?: "LONG" | "SHORT";
+  /** The directional council votes at entry, for per-agent outcome attribution. */
+  votes?: { id: string; vote: number }[];
 };
+
+/** Per-agent track record — how the council earns (or loses) its weight. */
+export type AgentStat = { votes: number; correct: number };
 
 export type AiMemory = {
   /** key = `${strategy}|${symbol}|${regime}` */
   stats: Record<string, Bucket>;
   /** key = symbol — context of positions the AI currently holds. */
   open: Record<string, OpenContext>;
+  /** key = agent id — running vote/hit counts that set each agent's weight. */
+  agents?: Record<string, AgentStat>;
+  /** Recent close directions × outcome (+1 long-paid / -1 short-paid), for the RL agent. */
+  recent?: number[];
   totalClosed: number;
   totalWins: number;
   totalPnl: number;
@@ -92,6 +103,51 @@ export function recordOutcome(mem: AiMemory, key: string, pnl: number, at: numbe
     totalPnl: mem.totalPnl + pnl,
     updatedAt: at,
   };
+}
+
+/** Minimum agent samples before its weight moves off the neutral 1.0. */
+const AGENT_MIN = 6;
+
+/**
+ * The weight Master AI gives an agent's vote — its earned influence.
+ * 1.0 until it has a track record, then scaled 0.4…1.6 by hit-rate.
+ */
+export function agentWeight(mem: AiMemory, id: string): number {
+  const a = mem.agents?.[id];
+  if (!a || a.votes < AGENT_MIN) return 1;
+  const acc = a.correct / a.votes; // 0..1
+  return Math.max(0.4, Math.min(1.6, 0.5 + acc));
+}
+
+/** Which direction has been paying lately (−1..1), the RL agent's input. */
+export function recentBias(mem: AiMemory): number {
+  const r = mem.recent ?? [];
+  if (r.length === 0) return 0;
+  return r.reduce((a, b) => a + b, 0) / r.length;
+}
+
+/**
+ * Fold one closed trade into the council's memory: credit each agent whose
+ * vote agreed (or disagreed) with the outcome, and record the paying direction.
+ */
+export function recordCouncilOutcome(
+  mem: AiMemory,
+  votes: { id: string; vote: number }[],
+  dir: "LONG" | "SHORT",
+  win: boolean,
+): AiMemory {
+  const agents = { ...(mem.agents ?? {}) };
+  const longWin = dir === "LONG";
+  for (const v of votes) {
+    if (Math.abs(v.vote) < 0.12) continue; // only agents that took a side
+    const prev = agents[v.id] ?? { votes: 0, correct: 0 };
+    const agreedWithTrade = v.vote > 0 === longWin;
+    const correct = agreedWithTrade === win; // right when it backed a winner or faded a loser
+    agents[v.id] = { votes: prev.votes + 1, correct: prev.correct + (correct ? 1 : 0) };
+  }
+  const paidDir = (longWin === win ? 1 : -1); // +1 = longs paid, -1 = shorts paid
+  const recent = [...(mem.recent ?? []), paidDir].slice(-12);
+  return { ...mem, agents, recent };
 }
 
 export type BucketView = {

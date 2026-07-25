@@ -1,17 +1,22 @@
 import { latestSignal } from "../backtest-lab";
 import {
+  agentWeight,
   bucketKey,
   EMPTY_MEMORY,
   learningScore,
+  recentBias,
+  recordCouncilOutcome,
   recordOutcome,
   shouldAvoid,
   type AiMemory,
   type OpenContext,
 } from "../ai-memory";
-import { fearGreed, higherTrend, impliedVol, marketDepth, scoreDeep, type DeepFactor } from "./confluence";
+import { fearGreed, type DeepFactor } from "./confluence";
 import { newsIntel, scoreNews } from "./news-intel";
 import { upcomingMacro, minutesTo } from "./econ-calendar";
-import { onchainFlow, scoreOnchain } from "./onchain";
+import { buildFeatures } from "./features";
+import { runCouncil } from "../council";
+import { AGENT_BY_ID } from "../agents";
 import { riskCheck, type OrderIntent } from "../testnet";
 import {
   sanitizeConfig,
@@ -68,6 +73,7 @@ export async function runCycle(
     const ctx = memory.open[symbol];
     if (ctx) {
       memory = recordOutcome(memory, bucketKey(ctx.strategy, symbol, ctx.regime), pnl, ranAt);
+      if (ctx.votes && ctx.dir) memory = recordCouncilOutcome(memory, ctx.votes, ctx.dir, pnl > 0);
       const nextOpen = { ...memory.open };
       delete nextOpen[symbol];
       memory = { ...memory, open: nextOpen };
@@ -129,6 +135,7 @@ export async function runCycle(
       if (!held.has(symbol)) {
         const ctx = memory.open[symbol];
         memory = recordOutcome(memory, bucketKey(ctx.strategy, symbol, ctx.regime), ctx.lastPnl, ranAt);
+        if (ctx.votes && ctx.dir) memory = recordCouncilOutcome(memory, ctx.votes, ctx.dir, ctx.lastPnl > 0);
         const nextOpen = { ...memory.open };
         delete nextOpen[symbol];
         memory = { ...memory, open: nextOpen };
@@ -150,11 +157,21 @@ export async function runCycle(
     score: number;
     deepAdj: number;
     deepFactors: DeepFactor[];
+    votes?: { id: string; vote: number }[];
   };
   const candidates: Candidate[] = [];
 
   // Market-wide sentiment is fetched once and shared across candidates.
-  const fng = config.deepMode ? await fearGreed() : null;
+  const fng = config.deepMode || config.councilMode ? await fearGreed() : null;
+
+  // Account posture, shared with the council's risk/monitor agents.
+  const ad = acc.data as unknown as Record<string, string | undefined>;
+  const wallet = Number(ad.totalWalletBalance ?? balance) || 0;
+  const upnl = Number(ad.totalUnrealizedProfit ?? "0");
+  const marginBal = Number(ad.totalMarginBalance ?? wallet) || 0;
+  const initMargin = Number(ad.totalPositionInitialMargin ?? ad.totalInitialMargin ?? "0");
+  const marginRatio = marginBal ? (initMargin / marginBal) * 100 : null;
+  const dayPnlPct = wallet ? (upnl / wallet) * 100 : null;
 
   // Scheduled-event lockout is market-wide: check once, keep the trader out of
   // the minutes around a known high-impact catalyst (expiry, CPI, FOMC).
@@ -200,71 +217,85 @@ export async function runCycle(
       continue;
     }
 
-    // Deep-confluence + news layers run concurrently, then fold into confidence.
-    // Deep reads the market's microstructure; news reads the headlines. Both are
-    // bounded adjustments, and the news layer can also veto the entry outright.
+    // News read once — feeds the council's News agent and drives the lockout.
+    const newsRead = config.newsMode ? await newsIntel(symbol) : null;
+    if (newsRead && config.newsLockout && scoreNews(signal.dir, newsRead).lockout) {
+      decisions.push({
+        symbol,
+        action: "news_lockout",
+        side: signal.dir,
+        confidence: signal.confidence,
+        detail: `งดเปิดสถานะ — ${newsRead.reason || newsRead.headline}`,
+      });
+      continue;
+    }
+
+    // The decision. With the Council on, all 50 agents vote and Master AI reads
+    // the weighted net; otherwise it's the raw technical signal.
+    let dir: "LONG" | "SHORT" = signal.dir;
+    let confidence = signal.confidence;
+    let reason = signal.reason;
     let deepAdj = 0;
     let deepFactors: DeepFactor[] = [];
+    let votes: { id: string; vote: number }[] | undefined;
 
-    const [deep, news, onchain] = await Promise.all([
-      config.deepMode
-        ? Promise.all([marketDepth(symbol), higherTrend(symbol, config.interval), impliedVol(symbol)]).then(
-            ([depth, hiTrend, iv]) => scoreDeep(signal.dir, depth, fng, hiTrend, iv),
-          )
-        : Promise.resolve(null),
-      config.newsMode ? newsIntel(symbol).then((intel) => ({ ...scoreNews(signal.dir, intel), intel })) : Promise.resolve(null),
-      // Dormant unless a paid provider key is set; returns null otherwise.
-      config.onchainMode ? onchainFlow(symbol).then((flow) => (flow ? { ...scoreOnchain(signal.dir, flow), flow } : null)) : Promise.resolve(null),
-    ]);
+    if (config.councilMode) {
+      const feats = await buildFeatures({
+        symbol,
+        candles: kl.data,
+        interval: config.interval,
+        fng,
+        newsBias: newsRead ? (newsRead.bias === "bullish" ? 1 : newsRead.bias === "bearish" ? -1 : 0) : 0,
+        newsImpact: newsRead ? newsRead.impact : 0,
+        newsDeep: newsRead ? newsRead.deep : false,
+        recentBias: recentBias(memory),
+        marginRatio,
+        dayPnlPct,
+        openPositions: held.size,
+        maxPositions: config.maxPositions,
+      });
+      const c = runCouncil(feats, (id) => agentWeight(memory, id));
 
-    if (deep) {
-      deepAdj += Math.round(deep.adj);
-      deepFactors = [...deepFactors, ...deep.factors];
-    }
-
-    if (onchain) {
-      deepAdj += onchain.adj;
-      deepFactors = [...deepFactors, onchain.factor];
-    }
-
-    if (news) {
-      deepFactors = [...deepFactors, news.factor];
-      if (config.newsLockout && news.lockout) {
-        decisions.push({
-          symbol,
-          action: "news_lockout",
-          side: signal.dir,
-          confidence: signal.confidence,
-          deepFactors,
-          detail: `งดเปิดสถานะ — ${news.intel.reason || news.intel.headline}`,
-        });
+      if (!c.dir) {
+        decisions.push({ symbol, action: "low_confidence", confidence: c.confidence, detail: `คณะ AI ไม่มีมติชัดเจน (${c.supporting} หนุน / ${c.against} ค้าน)` });
         continue;
       }
-      deepAdj += news.adj;
-    }
+      dir = c.dir;
+      confidence = c.confidence;
+      reason = `มติคณะ ${c.supporting} หนุน / ${c.against} ค้าน`;
+      deepAdj = Math.round(c.net * 100);
+      votes = c.votes.filter((v) => v.kind === "direction" && Math.abs(v.vote) >= 0.12).map((v) => ({ id: v.id, vote: v.vote }));
 
-    const confidence = Math.max(0, Math.min(99, Math.round(signal.confidence + deepAdj)));
+      // Top agreeing/dissenting agents become the decision-log chips.
+      const long = dir === "LONG";
+      deepFactors = [...c.votes]
+        .filter((v) => v.kind === "direction" && Math.abs(v.vote) >= 0.12)
+        .sort((a, b) => Math.abs(b.vote) - Math.abs(a.vote))
+        .slice(0, 8)
+        .map((v) => ({ label: AGENT_BY_ID.get(v.id)?.nameTh ?? v.id, agree: v.vote > 0 === long, note: v.note }));
+    }
 
     if (confidence < config.minConfidence) {
       decisions.push({
         symbol,
         action: "low_confidence",
-        side: signal.dir,
+        side: dir,
         confidence,
         deepAdj,
         deepFactors,
-        detail: `ความมั่นใจรวม ${confidence}% (เทคนิค ${signal.confidence}% ${deepAdj >= 0 ? "+" : ""}${deepAdj} เชิงลึก) < เกณฑ์ ${config.minConfidence}%`,
+        detail: `ความมั่นใจ ${confidence}% < เกณฑ์ ${config.minConfidence}%`,
       });
       continue;
     }
 
     candidates.push({
       symbol,
-      dir: signal.dir,
+      dir,
       baseConfidence: signal.confidence,
       confidence,
-      reason: signal.reason,
+      reason,
       regime: signal.regime,
+      votes,
       price: kl.data.at(-1)!.close,
       score,
       deepAdj,
@@ -311,7 +342,7 @@ export async function runCycle(
         decisions.push({ symbol: c.symbol, action: "error", side: c.dir, detail: `กระดานปฏิเสธ: ${res.message}` });
         continue;
       }
-      const ctx: OpenContext = { strategy: config.strategy, regime: c.regime, confidence: c.confidence, entryPrice: c.price, openedAt: ranAt, lastPnl: 0 };
+      const ctx: OpenContext = { strategy: config.strategy, regime: c.regime, confidence: c.confidence, entryPrice: c.price, openedAt: ranAt, lastPnl: 0, dir: c.dir, votes: c.votes };
       memory = { ...memory, open: { ...memory.open, [c.symbol]: ctx } };
       opened++;
       held.set(c.symbol, {} as PositionRaw);

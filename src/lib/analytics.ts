@@ -41,6 +41,92 @@ export function atrPct(candles: Candle[], period = 14): number {
   return last ? (sum / period / last) * 100 : 0;
 }
 
+export function sma(values: number[], period: number): number {
+  if (values.length < period) return values.reduce((a, b) => a + b, 0) / Math.max(values.length, 1);
+  const slice = values.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
+}
+
+export function stdev(values: number[], period: number): number {
+  const slice = values.slice(-period);
+  if (slice.length < 2) return 0;
+  const m = slice.reduce((a, b) => a + b, 0) / slice.length;
+  return Math.sqrt(slice.reduce((a, v) => a + (v - m) ** 2, 0) / slice.length);
+}
+
+/** Rate of change over `period` bars, in %. */
+export function roc(values: number[], period = 10): number {
+  if (values.length < period + 1) return 0;
+  const then = values[values.length - 1 - period];
+  const now = values.at(-1)!;
+  return then ? ((now - then) / then) * 100 : 0;
+}
+
+/** MACD histogram (12,26,9) — the last value; + = bullish momentum. */
+export function macdHist(values: number[]): number {
+  if (values.length < 35) return 0;
+  const e12 = ema(values, 12);
+  const e26 = ema(values, 26);
+  const macdLine = e12.map((v, i) => v - e26[i]);
+  const signal = ema(macdLine, 9);
+  return macdLine.at(-1)! - signal.at(-1)!;
+}
+
+/** Bollinger %B (20,2): 0 = lower band, 1 = upper band, can exceed [0,1]. */
+export function bollingerPctB(values: number[], period = 20, mult = 2): number {
+  if (values.length < period) return 0.5;
+  const mid = sma(values, period);
+  const sd = stdev(values, period);
+  if (sd === 0) return 0.5;
+  const upper = mid + mult * sd;
+  const lower = mid - mult * sd;
+  return (values.at(-1)! - lower) / (upper - lower);
+}
+
+/** ADX(14) — trend strength 0–100 (>25 = trending). */
+export function adx(candles: Candle[], period = 14): number {
+  if (candles.length < period * 2 + 1) return 0;
+  const tr: number[] = [];
+  const plusDM: number[] = [];
+  const minusDM: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const h = candles[i].high, l = candles[i].low, pc = candles[i - 1].close;
+    const up = h - candles[i - 1].high;
+    const down = candles[i - 1].low - l;
+    plusDM.push(up > down && up > 0 ? up : 0);
+    minusDM.push(down > up && down > 0 ? down : 0);
+    tr.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+  }
+  const smooth = (arr: number[]) => {
+    let s = arr.slice(0, period).reduce((a, b) => a + b, 0);
+    const out = [s];
+    for (let i = period; i < arr.length; i++) {
+      s = s - s / period + arr[i];
+      out.push(s);
+    }
+    return out;
+  };
+  const trS = smooth(tr), pS = smooth(plusDM), mS = smooth(minusDM);
+  const dx: number[] = [];
+  for (let i = 0; i < trS.length; i++) {
+    const pdi = trS[i] ? (pS[i] / trS[i]) * 100 : 0;
+    const mdi = trS[i] ? (mS[i] / trS[i]) * 100 : 0;
+    const sum = pdi + mdi;
+    dx.push(sum ? (Math.abs(pdi - mdi) / sum) * 100 : 0);
+  }
+  if (dx.length < period) return dx.at(-1) ?? 0;
+  return dx.slice(-period).reduce((a, b) => a + b, 0) / period;
+}
+
+/** EMA alignment: +1 when EMA12>34>50>200 (clean up-stack), −1 down-stack. */
+export function emaStack(values: number[]): number {
+  const e = (p: number) => ema(values, p).at(-1)!;
+  const a = e(12), b = e(34), c = e(50), d = e(200);
+  const up = (a > b ? 1 : 0) + (b > c ? 1 : 0) + (c > d ? 1 : 0);
+  const dn = (a < b ? 1 : 0) + (b < c ? 1 : 0) + (c < d ? 1 : 0);
+  return (up - dn) / 3;
+}
+
 export type Regime = {
   label: "TRENDING" | "RANGING" | "VOLATILE" | "REVERSAL";
   labelTh: string;

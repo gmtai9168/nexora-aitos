@@ -236,6 +236,27 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
         </div>
       </div>
 
+      {/* Council master toggle — route entries through all 50 agents */}
+      <button
+        type="button"
+        onClick={() => set("councilMode", !config.councilMode)}
+        className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-left transition-colors ${
+          config.councilMode ? "border-brand/50 bg-[#062a38]" : "border-line bg-[#0a121a]"
+        }`}
+      >
+        <span className="min-w-0">
+          <span className={`block text-[10.5px] font-semibold ${config.councilMode ? "text-brand" : "text-txt"}`}>
+            สภา AI 50 ตัว (Council)
+          </span>
+          <span className="block text-[8.5px] text-dim">
+            ทุกตัวโหวตจากข้อมูลจริง · Master AI รวมด้วยน้ำหนักที่เรียนรู้จากผลงาน
+          </span>
+        </span>
+        <span className={`shrink-0 rounded px-1.5 py-[2px] text-[9px] ${config.councilMode ? "bg-up text-black" : "bg-[#1d2f3c] text-dim"}`}>
+          {config.councilMode ? "เปิด" : "ปิด"}
+        </span>
+      </button>
+
       {/* Deep-confluence toggle */}
       <button
         type="button"

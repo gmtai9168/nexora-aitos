@@ -30,6 +30,8 @@ export type AiTraderConfig = {
   macroLockout: boolean;
   /** On-chain exchange-flow factor — dormant until a paid provider key is set. */
   onchainMode: boolean;
+  /** Route entries through the 50-agent Council (weighted by earned track record). */
+  councilMode: boolean;
 };
 
 export const DEFAULT_AI_CONFIG: AiTraderConfig = {
@@ -53,6 +55,7 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   macroLockout: true,
   // Dormant scaffold — needs GLASSNODE_API_KEY / NANSEN_API_KEY at real-money launch.
   onchainMode: false,
+  councilMode: true,
 };
 
 /** Hard ceilings the engine clamps the config to, whatever the UI sends. */

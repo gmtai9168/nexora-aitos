@@ -41,7 +41,7 @@ export async function fearGreed(): Promise<number | null> {
  * Per-symbol futures microstructure (real mainnet data)
  * ------------------------------------------------------------------ */
 
-type Premium = { lastFundingRate: string };
+type Premium = { lastFundingRate: string; markPrice?: string; indexPrice?: string };
 type OiPoint = { sumOpenInterest: string };
 type Ratio = { longShortRatio?: string; buySellRatio?: string; longAccount?: string };
 
@@ -54,6 +54,10 @@ export type MarketDepth = {
   longShare: number | null; // % of accounts long
   /** Resting-order pressure near mid: + = bids heavier (buy wall), − = asks. */
   obImbalance: number | null; // %
+  /** Perp premium/discount vs index, %: + = perp rich. */
+  basis: number | null;
+  /** Best bid/ask spread in basis points — a market-maker/liquidity read. */
+  spreadBps: number | null;
 };
 
 /** #2 Order-book imbalance from the live futures depth (free, real-time). */
@@ -86,13 +90,62 @@ export async function marketDepth(symbol: string): Promise<MarketDepth> {
   const bsr = taker?.[0]?.buySellRatio ? Number(taker[0].buySellRatio) : null;
   if (bsr && bsr > 0) takerBuyShare = (bsr / (1 + bsr)) * 100;
 
+  let basis: number | null = null;
+  const mark = prem?.markPrice ? Number(prem.markPrice) : null;
+  const index = prem?.indexPrice ? Number(prem.indexPrice) : null;
+  if (mark && index) basis = ((mark - index) / index) * 100;
+
+  let spreadBps: number | null = null;
+  if (book?.bids?.[0] && book?.asks?.[0]) {
+    const bid = Number(book.bids[0][0]);
+    const ask = Number(book.asks[0][0]);
+    const mid = (bid + ask) / 2;
+    if (mid > 0) spreadBps = ((ask - bid) / mid) * 10000;
+  }
+
   return {
     funding: prem ? Number(prem.lastFundingRate) * 100 : null,
     oiChangePct,
     takerBuyShare,
     longShare: lsr?.[0]?.longAccount ? Number(lsr[0].longAccount) * 100 : null,
     obImbalance: imbalance(book),
+    basis,
+    spreadBps,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Whale / aggressive-trade flow — recent large market trades.
+ * ------------------------------------------------------------------ */
+
+type AggTrade = { q: string; p: string; m: boolean }; // qty, price, isBuyerMaker
+
+export type WhaleFlow = {
+  /** Share of large-trade notional that was aggressive buying, %. */
+  buyShare: number | null;
+  /** Net taker delta over the window, in quote notional. */
+  delta: number | null;
+};
+
+/** Large-trade buy/sell pressure from the last ~1000 aggregated trades. */
+export async function whaleFlow(symbol: string): Promise<WhaleFlow> {
+  const trades = await j<AggTrade[]>(`${FAPI}/fapi/v1/aggTrades?symbol=${symbol}&limit=1000`);
+  if (!trades || trades.length < 20) return { buyShare: null, delta: null };
+
+  const notional = trades.map((t) => ({ n: Number(t.p) * Number(t.q), buy: !t.m }));
+  // "Large" = top quartile by notional — the closest free proxy for whale prints.
+  const sorted = [...notional].map((x) => x.n).sort((a, b) => a - b);
+  const cut = sorted[Math.floor(sorted.length * 0.75)] ?? 0;
+  let bigBuy = 0, bigSell = 0, delta = 0;
+  for (const t of notional) {
+    delta += t.buy ? t.n : -t.n;
+    if (t.n >= cut) {
+      if (t.buy) bigBuy += t.n;
+      else bigSell += t.n;
+    }
+  }
+  const tot = bigBuy + bigSell;
+  return { buyShare: tot ? (bigBuy / tot) * 100 : null, delta };
 }
 
 /* ------------------------------------------------------------------ *
