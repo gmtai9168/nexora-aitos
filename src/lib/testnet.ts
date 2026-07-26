@@ -59,9 +59,17 @@ export const RISK_LIMITS = {
 /** Binance USDⓈ-M futures taker fee (VIP0). Both entry and exit are takers here. */
 export const TAKER_FEE = 0.0004;
 
-/** Estimated round-trip fee (entry + exit) in USDT for a given position notional. */
+/** Estimated round-trip fee (entry + exit) in USDT — the full cost of a trade. */
 export function roundTripFee(notionalUsd: number): number {
   return Math.abs(notionalUsd) * TAKER_FEE * 2;
+}
+
+/**
+ * One-way (exit) fee in USDT. For a live position the entry fee is already out
+ * of the wallet, so "what you'd keep if you close now" only subtracts this side.
+ */
+export function closeFee(notionalUsd: number): number {
+  return Math.abs(notionalUsd) * TAKER_FEE;
 }
 
 export type RiskVerdict = {

@@ -1,5 +1,5 @@
 import { account, positions } from "@/lib/server/binance-testnet";
-import { roundTripFee, type Balance, type Position } from "@/lib/testnet";
+import { closeFee, type Balance, type Position } from "@/lib/testnet";
 
 export const maxDuration = 20;
 
@@ -14,8 +14,8 @@ export async function GET() {
     );
   }
 
-  // P&L is shown net of the estimated round-trip fee — what you'd keep if the
-  // position closed now at market. Keeps the numbers honest under fast turnover.
+  // P&L is shown net of the estimated exit fee only — the entry fee is already
+  // out of the wallet, so this is what you'd keep if you closed the position now.
   const open: Position[] = pos.ok
     ? pos.data
         .filter((p) => Number(p.positionAmt) !== 0)
@@ -31,13 +31,13 @@ export async function GET() {
             entryPrice: Number(p.entryPrice),
             markPrice: mark,
             liquidationPrice: Number(p.liquidationPrice),
-            unrealizedPnl: Number(p.unRealizedProfit) - roundTripFee(notional),
+            unrealizedPnl: Number(p.unRealizedProfit) - closeFee(notional),
             leverage: Number(p.leverage),
           };
         })
     : [];
 
-  const totalFees = open.reduce((s, p) => s + roundTripFee(p.notional), 0);
+  const totalFees = open.reduce((s, p) => s + closeFee(p.notional), 0);
   const balance: Balance = {
     walletBalance: Number(acc.data.totalWalletBalance),
     availableBalance: Number(acc.data.availableBalance),
