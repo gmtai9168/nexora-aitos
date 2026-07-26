@@ -18,6 +18,7 @@ import { Panel, Tag } from "../Panel";
 const CYCLE_MS = 60_000;
 const INTERVALS = ["1m", "5m", "15m", "1h"];
 const MEMORY_KEY = "nexora-ai-memory-v1";
+const CONFIG_KEY = "nexora-ai-config-v1";
 
 function loadMemory(): AiMemory {
   if (typeof window === "undefined") return EMPTY_MEMORY;
@@ -29,9 +30,20 @@ function loadMemory(): AiMemory {
   }
 }
 
+/** Remember the operator's settings across navigation; new fields fall back to defaults. */
+function loadConfig(): AiTraderConfig {
+  if (typeof window === "undefined") return DEFAULT_AI_CONFIG;
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    return raw ? { ...DEFAULT_AI_CONFIG, ...(JSON.parse(raw) as Partial<AiTraderConfig>) } : DEFAULT_AI_CONFIG;
+  } catch {
+    return DEFAULT_AI_CONFIG;
+  }
+}
+
 export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
   const { emergencyStop } = useMarket();
-  const [config, setConfig] = useState<AiTraderConfig>(DEFAULT_AI_CONFIG);
+  const [config, setConfig] = useState<AiTraderConfig>(loadConfig);
   const [running, setRunning] = useState(false); // live auto-loop on
   const [busy, setBusy] = useState(false); // a cycle is in flight
   const [reports, setReports] = useState<CycleReport[]>([]);
@@ -66,6 +78,15 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
       clearInterval(id);
     };
   }, []);
+
+  // Persist settings so navigating away and back doesn't reset them.
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    } catch {
+      /* storage full — keep the in-memory copy */
+    }
+  }, [config]);
 
   const set = <K extends keyof AiTraderConfig>(k: K, v: AiTraderConfig[K]) =>
     setConfig((c) => ({ ...c, [k]: v }));
