@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useMarket } from "@/lib/market-context";
 import { useUi } from "@/lib/ui-context";
+import { useRole } from "@/lib/role-context";
+import { ACCESS_META } from "@/lib/rbac";
 import {
   IconBell,
   IconBot,
@@ -119,6 +121,11 @@ function EmergencyStop() {
 export function Sidebar() {
   const pathname = usePathname();
   const { navOpen, closeNav } = useUi();
+  const { access, canEdit } = useRole();
+
+  // Hide pages the role can't open at all; the rest show with a level badge.
+  const visible = NAV.filter((item) => access(item.href) !== "none");
+  const showEmergency = canEdit("/execution") || canEdit("/risk");
 
   return (
     <>
@@ -138,8 +145,10 @@ export function Sidebar() {
         }`}
       >
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-2.5">
-          {NAV.map(({ href, th, en, Icon }) => {
+          {visible.map(({ href, th, en, Icon }) => {
             const active = pathname === href;
+            const level = access(href);
+            const badge = ACCESS_META[level].badge;
             return (
               <Link
                 key={href}
@@ -155,7 +164,7 @@ export function Sidebar() {
                   <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-brand shadow-[0_0_10px_rgba(0,212,255,0.8)]" />
                 )}
                 <Icon size={16} />
-                <span className="min-w-0 leading-tight">
+                <span className="min-w-0 flex-1 leading-tight">
                   <span className="block truncate text-[11.5px] font-medium">{th}</span>
                   <span
                     className={`block truncate text-[9px] ${
@@ -165,13 +174,23 @@ export function Sidebar() {
                     {en}
                   </span>
                 </span>
+                {badge && (
+                  <span
+                    className={`shrink-0 rounded px-1 py-[1px] text-[8px] ${
+                      level === "view" ? "bg-[#2a2008] text-warn" : "bg-[#12222c] text-dim"
+                    }`}
+                    title={ACCESS_META[level].th}
+                  >
+                    {badge}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
         <div className="border-t border-line p-2">
-          <EmergencyStop />
+          {showEmergency && <EmergencyStop />}
         </div>
       </aside>
     </>

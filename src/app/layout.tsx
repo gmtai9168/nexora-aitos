@@ -7,6 +7,8 @@ import { SystemFooter } from "@/components/SystemFooter";
 import { MarketProvider } from "@/lib/market-context";
 import { LiveAccountProvider } from "@/lib/live-account";
 import { UiProvider } from "@/lib/ui-context";
+import { RoleProvider } from "@/lib/role-context";
+import { RoleGuard } from "@/components/RoleGuard";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const thai = Noto_Sans_Thai({ variable: "--font-thai", subsets: ["thai"] });
@@ -33,12 +35,16 @@ export default function RootLayout({
         <MarketProvider>
           <LiveAccountProvider>
             <UiProvider>
-              <TopBar />
-              <Sidebar />
-              <div className="flex min-h-[calc(100vh-70px)] min-w-0 flex-col overflow-x-hidden lg:ml-[196px]">
-                <main className="min-w-0 flex-1 p-2 sm:p-2.5">{children}</main>
-                <SystemFooter />
-              </div>
+              <RoleProvider>
+                <TopBar />
+                <Sidebar />
+                <div className="flex min-h-[calc(100vh-70px)] min-w-0 flex-col overflow-x-hidden lg:ml-[196px]">
+                  <main className="min-w-0 flex-1 p-2 sm:p-2.5">
+                    <RoleGuard>{children}</RoleGuard>
+                  </main>
+                  <SystemFooter />
+                </div>
+              </RoleProvider>
             </UiProvider>
           </LiveAccountProvider>
         </MarketProvider>

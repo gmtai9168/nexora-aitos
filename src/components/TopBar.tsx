@@ -6,6 +6,8 @@ import { bkkTime } from "@/lib/format";
 import { useMarket, useNow } from "@/lib/market-context";
 import { useLiveAccount } from "@/lib/live-account";
 import { useUi } from "@/lib/ui-context";
+import { useRole } from "@/lib/role-context";
+import { ROLE_ORDER, ROLES } from "@/lib/rbac";
 import { TOTAL_AGENTS } from "@/lib/agents";
 import { ALL_LISTINGS, badgeText } from "@/lib/universe";
 import { IconChevronDown, IconSearch, IconBell, IconMaximize, IconMenu } from "./icons";
@@ -359,17 +361,86 @@ export function TopBar() {
           <IconMaximize size={16} />
         </button>
 
-        <div className="flex items-center gap-2 border-l border-line pl-2 sm:pl-3">
-          <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-brand to-brand-2 text-[10px] font-bold text-black">
-            GM
-          </span>
-          <span className="hidden leading-tight sm:block">
-            <span className="block text-[11px] text-txt">Global Mining</span>
-            <span className="block text-[9px] text-dim">Administrator</span>
-          </span>
-          <IconChevronDown size={13} className="hidden text-dim sm:block" />
-        </div>
+        <RoleMenu />
       </div>
     </header>
+  );
+}
+
+/** Current user + a role switcher (until real auth ships, this drives RBAC). */
+function RoleMenu() {
+  const { role, setRole } = useRole();
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div ref={boxRef} className="relative border-l border-line pl-2 sm:pl-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2"
+      >
+        <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-brand to-brand-2 text-[10px] font-bold text-black">
+          GM
+        </span>
+        <span className="hidden leading-tight text-left sm:block">
+          <span className="block text-[11px] text-txt">Global Mining</span>
+          <span className="block text-[9px] text-brand">{ROLES[role].th}</span>
+        </span>
+        <IconChevronDown size={13} className="hidden text-dim sm:block" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[248px] rounded-lg border border-line bg-panel p-1.5 shadow-xl">
+          <p className="px-2 py-1 text-[9px] text-dim">
+            บทบาท (RBAC) — สลับเพื่อดูสิทธิ์แต่ละระดับ
+          </p>
+          <ul className="max-h-[360px] overflow-y-auto">
+            {ROLE_ORDER.map((r) => {
+              const info = ROLES[r];
+              const activeRole = r === role;
+              return (
+                <li key={r}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRole(r);
+                      setOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-[#0e1a24] ${
+                      activeRole ? "bg-[#0e1f26]" : ""
+                    }`}
+                  >
+                    <span
+                      className={`num grid size-[18px] shrink-0 place-items-center rounded text-[9px] font-bold ${
+                        activeRole ? "bg-brand text-black" : "bg-[#16242f] text-muted"
+                      }`}
+                    >
+                      {info.level}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[10.5px] text-txt">{info.th}</span>
+                      <span className="block truncate text-[8.5px] text-dim">{info.en} · {info.desc}</span>
+                    </span>
+                    {activeRole && <span className="shrink-0 text-[9px] text-brand">✓</span>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="border-t border-line-soft px-2 pt-1.5 text-[8px] leading-snug text-dim">
+            โหมดสาธิตสิทธิ์ — ระบบสมาชิกจริง (สมัคร/KYC/แพ็กเกจ) เป็นเฟสถัดไปที่ต้องมี backend
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
