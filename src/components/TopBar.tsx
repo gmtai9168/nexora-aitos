@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bkkTime } from "@/lib/format";
 import { useMarket, useNow } from "@/lib/market-context";
+import { useLiveAccount } from "@/lib/live-account";
 import { useUi } from "@/lib/ui-context";
 import { TOTAL_AGENTS } from "@/lib/agents";
 import { ALL_LISTINGS, badgeText } from "@/lib/universe";
@@ -162,6 +163,7 @@ type Note = { id: string; from: string; text: string; meta: string; tone: "up" |
 
 function Notifications() {
   const { decision, exchanges, regime, symbol } = useMarket();
+  const live = useLiveAccount();
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -177,11 +179,27 @@ function Notifications() {
   const notes = useMemo<Note[]>(() => {
     const out: Note[] = [];
 
+    // Real autonomous trades — the actual coins the AI opened, not the coin you're viewing.
+    if (live.positions.length > 0) {
+      const list = live.positions
+        .slice(0, 6)
+        .map((p) => `${p.symbol.replace("USDT", "")} ${p.side}`)
+        .join(" · ");
+      out.push({
+        id: "master-pos",
+        from: "Master AI",
+        text: `เปิด ${live.positions.length} สถานะ: ${list}`,
+        meta: `${live.unrealizedPnl >= 0 ? "+" : ""}${live.unrealizedPnl.toFixed(2)}`,
+        tone: live.unrealizedPnl >= 0 ? "up" : "down",
+      });
+    }
+
+    // Signal for the coin currently open on the dashboard — advisory, not an executed trade.
     if (decision && decision.action !== "WAIT") {
       out.push({
-        id: "master",
+        id: "signal",
         from: "Master AI",
-        text: `${decision.action === "LONG" ? "อนุมัติ" : "อนุมัติฝั่งขาย"} ${symbol.replace("USDT", "")} ${decision.action}`,
+        text: `สัญญาณ ${symbol.replace("USDT", "")} → ${decision.action} (เหรียญที่กำลังดู)`,
         meta: `${decision.confidence}%`,
         tone: decision.action === "LONG" ? "up" : "down",
       });
@@ -220,7 +238,7 @@ function Notifications() {
     }
 
     return out;
-  }, [decision, exchanges, regime, symbol]);
+  }, [decision, exchanges, regime, symbol, live.positions, live.unrealizedPnl]);
 
   return (
     <div ref={boxRef} className="relative">
