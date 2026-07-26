@@ -33,10 +33,12 @@ function explain(
       `ซึ่งจัดอยู่ในระดับ "${score.verdictTh}"`,
   );
 
-  out.push(
-    `สัญญาณที่หนุนมากที่สุดคือ${strong.map((s) => `${s.th} (${s.value.toFixed(0)})`).join(" · ")} ` +
-      `โดยเฉพาะ${strong[0].th}ที่อ่านค่าได้ว่า ${strong[0].detail}`,
-  );
+  if (strong.length) {
+    out.push(
+      `สัญญาณที่หนุนมากที่สุดคือ${strong.map((s) => `${s.th} (${s.value.toFixed(0)})`).join(" · ")} ` +
+        `โดยเฉพาะ${strong[0].th}ที่อ่านค่าได้ว่า ${strong[0].detail}`,
+    );
+  }
 
   if (wall) {
     out.push(
@@ -51,10 +53,12 @@ function explain(
       : `AI ในระบบเห็นพ้องกันในระดับ ${cons.agreementPct}% — ${cons.headline}`,
   );
 
-  out.push(
-    `จุดที่ต้องระวังคือ${weak.map((w) => `${w.th} (${w.value.toFixed(0)})`).join(" และ ")} ` +
-      `โดย${weak[0].th}อ่านค่าได้ว่า ${weak[0].detail}`,
-  );
+  if (weak.length) {
+    out.push(
+      `จุดที่ต้องระวังคือ${weak.map((w) => `${w.th} (${w.value.toFixed(0)})`).join(" และ ")} ` +
+        `โดย${weak[0].th}อ่านค่าได้ว่า ${weak[0].detail}`,
+    );
+  }
 
   if (onchain.fearGreed !== null) {
     out.push(

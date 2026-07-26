@@ -9,6 +9,7 @@ import {
   scoreCoin,
 } from "@/lib/scoring";
 import { newsBalance, useCoinIntel } from "@/lib/use-coin-intel";
+import { ErrorBoundary } from "../ErrorBoundary";
 import { TradingChart } from "../TradingChart";
 import { AiScorePanel } from "./AiScorePanel";
 import { CoinProfile } from "./CoinProfile";
@@ -81,42 +82,44 @@ export function CoinIntelView() {
       {/* Screen → chart → verdict */}
       <div className="grid gap-2.5 xl:grid-cols-[300px_minmax(0,1fr)_336px]">
         <TopCoinsTable />
-        <TradingChart />
+        <ErrorBoundary resetKey={symbol}><TradingChart /></ErrorBoundary>
         <div className="flex min-w-0 flex-col gap-2.5">
-          <AiScorePanel score={score} />
-          <ConsensusPanel data={consensus} />
+          <ErrorBoundary resetKey={symbol}><AiScorePanel score={score} /></ErrorBoundary>
+          <ErrorBoundary resetKey={symbol}><ConsensusPanel data={consensus} /></ErrorBoundary>
         </div>
       </div>
 
       {/* Microstructure and flow */}
       <div className="grid gap-2.5 xl:grid-cols-2">
-        <OrderBookPanel micro={intel.micro} />
-        <SmartMoneyPanel micro={intel.micro} />
+        <ErrorBoundary resetKey={symbol}><OrderBookPanel micro={intel.micro} /></ErrorBoundary>
+        <ErrorBoundary resetKey={symbol}><SmartMoneyPanel micro={intel.micro} /></ErrorBoundary>
       </div>
 
       <div className="grid gap-2.5 xl:grid-cols-2">
-        <FuturesPanel />
-        <OnChainPanel data={intel.onchain} />
+        <ErrorBoundary resetKey={symbol}><FuturesPanel /></ErrorBoundary>
+        <ErrorBoundary resetKey={symbol}><OnChainPanel data={intel.onchain} /></ErrorBoundary>
       </div>
 
       {/* Decision and its consequences */}
       <div className="grid gap-2.5 xl:grid-cols-2">
-        <EntryPlanPanel plan={plan} />
-        <RiskPanel rows={risks} />
+        <ErrorBoundary resetKey={symbol}><EntryPlanPanel plan={plan} /></ErrorBoundary>
+        <ErrorBoundary resetKey={symbol}><RiskPanel rows={risks} /></ErrorBoundary>
       </div>
 
       <div className="grid gap-2.5 xl:grid-cols-2">
-        <ReasoningPanel
-          score={score}
-          consensus={consensus}
-          plan={plan}
-          micro={intel.micro}
-          onchain={intel.onchain}
-        />
-        <NewsPanel items={intel.news} />
+        <ErrorBoundary resetKey={symbol}>
+          <ReasoningPanel
+            score={score}
+            consensus={consensus}
+            plan={plan}
+            micro={intel.micro}
+            onchain={intel.onchain}
+          />
+        </ErrorBoundary>
+        <ErrorBoundary resetKey={symbol}><NewsPanel items={intel.news} /></ErrorBoundary>
       </div>
 
-      <ReplayPanel score={score} />
+      <ErrorBoundary resetKey={symbol}><ReplayPanel score={score} /></ErrorBoundary>
     </div>
   );
 }
