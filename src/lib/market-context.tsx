@@ -206,7 +206,10 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
 
   const pullQuotes = useCallback(async () => {
     try {
-      const res = await fetch(`/api/quotes?symbols=${WATCHED.join(",")}`);
+      // Always quote the selected symbol too — stocks aren't in the watched list,
+      // so this is what lets a picked stock/index feed the analysis panels.
+      const wanted = WATCHED.includes(symbol) ? WATCHED : [...WATCHED, symbol];
+      const res = await fetch(`/api/quotes?symbols=${wanted.join(",")}`);
       if (!res.ok) throw new Error(String(res.status));
       const data: { quotes: Quote[] } = await res.json();
       if (data.quotes.length === 0) throw new Error("empty");
@@ -221,7 +224,7 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     } catch {
       setConnected(false);
     }
-  }, []);
+  }, [symbol]);
 
   const pullMovers = useCallback(async () => {
     try {

@@ -60,6 +60,8 @@ export function CoinIntelView() {
     [regime, context, intel.correlations, intel.onchain, exchanges, balance.negative],
   );
 
+  const isStock = !/USDT$/.test(symbol);
+
   return (
     <div className="flex flex-col gap-2.5">
       <CoinProfile
@@ -67,6 +69,14 @@ export function CoinIntelView() {
         correlations={intel.correlations}
         confidence={decision?.confidence ?? 0}
       />
+
+      {isStock && (
+        <div className="rounded-lg border border-brand/30 bg-[#0a1a20] px-3 py-2 text-[10px] leading-relaxed text-dim">
+          <span className="font-semibold text-brand">โหมดหุ้น:</span> วิเคราะห์จากราคาจริง — เทรนด์ · โมเมนตัม · ความผันผวน · วอลุ่ม · ตำแหน่งในกรอบวัน · ความสัมพันธ์สินทรัพย์
+          <br />
+          ปัจจัยเฉพาะคริปโต (Funding · สัญญาคงค้าง OI · แรงซื้อวาฬ · Liquidation · ออนเชน · Order Book เชิงลึก) ไม่มีในตลาดหุ้น จึงแสดงเป็น N/A
+        </div>
+      )}
 
       {/* Screen → chart → verdict */}
       <div className="grid gap-2.5 xl:grid-cols-[300px_minmax(0,1fr)_336px]">
