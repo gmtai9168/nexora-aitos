@@ -233,6 +233,7 @@ export function TradingChart() {
     if (candles.length < 20) return;
 
     const add = (price: number, color: string, title: string) => {
+      if (!Number.isFinite(price)) return;
       r.lines.push(
         r.candles.createPriceLine({
           price,
@@ -245,6 +246,7 @@ export function TradingChart() {
       );
     };
 
+    try {
     if (active.has("ob")) {
       for (const ob of findOrderBlocks(candles, 3)) {
         const c = ob.bull ? "rgba(20,226,160,0.55)" : "rgba(255,74,104,0.55)";
@@ -267,6 +269,9 @@ export function TradingChart() {
           "LIQ",
         );
       }
+    }
+    } catch {
+      /* overlay drawing failed for this feed — chart stays without overlays */
     }
   }, [active, candles]);
 

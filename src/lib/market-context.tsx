@@ -147,6 +147,10 @@ const EMPTY_MOVERS: Movers = {
 const NO_CANDLES: Candle[] = [];
 const NO_EXCHANGES: ExchangeHealth[] = [];
 
+// Safe fallbacks so a bad feed can never throw out of the layout-level provider.
+const NEUTRAL_REGIME = detectRegime(NO_CANDLES);
+const NEUTRAL_SIGNAL = readSignal(NO_CANDLES, NEUTRAL_REGIME);
+
 type Board = { quotes: Map<string, Quote>; prev: Map<string, number> };
 const EMPTY_BOARD: Board = { quotes: new Map(), prev: new Map() };
 
@@ -317,12 +321,30 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   const context = ctxState.key === symbol ? ctxState.ctx : EMPTY_CONTEXT;
   const council = councilState.key === symbol ? councilState.data : null;
 
-  const regime = useMemo(() => detectRegime(candles), [candles]);
-  const signal = useMemo(() => readSignal(candles, regime), [candles, regime]);
+  // These run during render inside the layout provider, so a throw here would
+  // blank the whole app (page-level error boundaries can't catch it). Guard each.
+  const regime = useMemo(() => {
+    try {
+      return detectRegime(candles);
+    } catch {
+      return NEUTRAL_REGIME;
+    }
+  }, [candles]);
+  const signal = useMemo(() => {
+    try {
+      return readSignal(candles, regime);
+    } catch {
+      return NEUTRAL_SIGNAL;
+    }
+  }, [candles, regime]);
   const decision = useMemo(() => {
-    const base = decide(symbol, candles, regime, context);
-    if (!base) return null;
-    return council && council.master ? mergeCouncil(base, council) : base;
+    try {
+      const base = decide(symbol, candles, regime, context);
+      if (!base) return null;
+      return council && council.master ? mergeCouncil(base, council) : base;
+    } catch {
+      return null;
+    }
   }, [symbol, candles, regime, context, council]);
 
   const value = useMemo<MarketState>(
