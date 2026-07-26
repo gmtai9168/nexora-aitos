@@ -72,6 +72,7 @@ export function useCoinIntel(symbol: string): CoinIntel {
       const [onchain, corr, news] = await Promise.all([
         fetch(`/api/onchain?symbol=${encodeURIComponent(symbol)}`)
           .then((r) => r.json())
+          .then((d) => ({ ...EMPTY_ONCHAIN, ...d }))
           .catch(() => EMPTY_ONCHAIN),
         fetch(`/api/correlation?symbol=${encodeURIComponent(symbol)}`)
           .then((r) => r.json())
@@ -107,7 +108,8 @@ export function useCoinIntel(symbol: string): CoinIntel {
       try {
         const res = await fetch(`/api/microstructure?symbol=${encodeURIComponent(symbol)}`);
         const data = await res.json();
-        if (!cancelled) setMicro({ key: symbol, data });
+        // Normalize so a stock feed's missing fields (bids/asks/…) are [] not undefined.
+        if (!cancelled) setMicro({ key: symbol, data: { ...EMPTY_MICRO, ...data } });
       } catch {
         /* keep the last book */
       }

@@ -264,8 +264,10 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   const pullContext = useCallback(async () => {
     try {
       const res = await fetch(`/api/context?symbol=${encodeURIComponent(symbol)}`);
-      const data: MarketContext = await res.json();
-      setCtxState({ key: symbol, ctx: data });
+      const data: Partial<MarketContext> = await res.json();
+      // Normalize to the full shape — a stock feed omits crypto fields, which
+      // would otherwise arrive as `undefined` and slip past `=== null` guards.
+      setCtxState({ key: symbol, ctx: { ...EMPTY_CONTEXT, ...data } });
     } catch {
       setCtxState({ key: symbol, ctx: EMPTY_CONTEXT });
     }
