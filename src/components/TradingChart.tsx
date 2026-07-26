@@ -193,28 +193,34 @@ export function TradingChart() {
       },
     });
 
-    r.candles.setData(
-      candles.map((c) => ({
-        time: c.time as UTCTimestamp,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      })),
-    );
-    r.volume.setData(
-      candles.map((c) => ({
-        time: c.time as UTCTimestamp,
-        value: c.volume,
-        color: c.close >= c.open ? "rgba(20,226,160,0.3)" : "rgba(255,74,104,0.3)",
-      })),
-    );
+    // The chart library throws on malformed series data; keep any such error
+    // from unmounting the whole page (candles are pre-sanitized upstream too).
+    try {
+      r.candles.setData(
+        candles.map((c) => ({
+          time: c.time as UTCTimestamp,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        })),
+      );
+      r.volume.setData(
+        candles.map((c) => ({
+          time: c.time as UTCTimestamp,
+          value: c.volume,
+          color: c.close >= c.open ? "rgba(20,226,160,0.3)" : "rgba(255,74,104,0.3)",
+        })),
+      );
 
-    const closes = candles.map((c) => c.close);
-    const f = ema(closes, 12);
-    const s = ema(closes, 34);
-    r.fast.setData(candles.map((c, i) => ({ time: c.time as UTCTimestamp, value: f[i] })));
-    r.slow.setData(candles.map((c, i) => ({ time: c.time as UTCTimestamp, value: s[i] })));
+      const closes = candles.map((c) => c.close);
+      const f = ema(closes, 12);
+      const s = ema(closes, 34);
+      r.fast.setData(candles.map((c, i) => ({ time: c.time as UTCTimestamp, value: f[i] })));
+      r.slow.setData(candles.map((c, i) => ({ time: c.time as UTCTimestamp, value: s[i] })));
+    } catch {
+      /* malformed feed for this symbol — leave the previous series in place */
+    }
   }, [candles]);
 
   // Structural overlays are drawn as price lines and fully rebuilt on toggle.

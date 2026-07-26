@@ -242,7 +242,16 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
         `/api/candles?symbol=${encodeURIComponent(symbol)}&tf=${timeframe}&limit=${SUB_MINUTE.has(timeframe) ? 400 : 300}`,
       );
       const data: { candles: Candle[] } = await res.json();
-      setCandleState({ key: candleKey, candles: data.candles ?? NO_CANDLES });
+      // Sanitize at the source so every consumer (chart, indicators, scoring)
+      // gets clean data. Yahoo stock feeds can carry null/NaN gaps or duplicate
+      // timestamps, which the chart library rejects with a hard throw.
+      const seen = new Map<number, Candle>();
+      for (const c of data.candles ?? []) {
+        if (![c.time, c.open, c.high, c.low, c.close].every((n) => Number.isFinite(n))) continue;
+        seen.set(c.time, { ...c, volume: Number.isFinite(c.volume) ? c.volume : 0 });
+      }
+      const clean = [...seen.values()].sort((a, b) => a.time - b.time);
+      setCandleState({ key: candleKey, candles: clean.length ? clean : NO_CANDLES });
     } catch {
       setCandleState({ key: candleKey, candles: NO_CANDLES });
     }
