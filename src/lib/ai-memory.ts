@@ -47,6 +47,12 @@ export type AiMemory = {
   totalClosed: number;
   totalWins: number;
   totalPnl: number;
+  /** Sum of winning P&L (gross profit) — for Profit Factor. Accumulates going forward. */
+  grossWin?: number;
+  /** Sum of |losing P&L| (gross loss) — for Profit Factor. */
+  grossLoss?: number;
+  /** Rolling per-trade P&L series (last 500) — for the equity curve / max drawdown. */
+  pnlSeries?: number[];
   updatedAt: number;
 };
 
@@ -101,6 +107,9 @@ export function recordOutcome(mem: AiMemory, key: string, pnl: number, at: numbe
     totalClosed: mem.totalClosed + 1,
     totalWins: mem.totalWins + win,
     totalPnl: mem.totalPnl + pnl,
+    grossWin: (mem.grossWin ?? 0) + (pnl > 0 ? pnl : 0),
+    grossLoss: (mem.grossLoss ?? 0) + (pnl < 0 ? -pnl : 0),
+    pnlSeries: [...(mem.pnlSeries ?? []), pnl].slice(-500),
     updatedAt: at,
   };
 }

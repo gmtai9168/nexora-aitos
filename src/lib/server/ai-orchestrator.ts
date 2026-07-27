@@ -46,6 +46,12 @@ export async function clearMemory(): Promise<void> {
   if (kvConfigured()) await kvSetJson(MEMORY_KEY, EMPTY_MEMORY);
 }
 
+/** The AI's learned memory from KV (empty when no store / nothing learned yet). */
+export async function getMemory(): Promise<AiMemory> {
+  if (!kvConfigured()) return EMPTY_MEMORY;
+  return (await kvGetJson<AiMemory>(MEMORY_KEY)) ?? EMPTY_MEMORY;
+}
+
 /* ------------------------------------------------------------------ *
  * Control state — armed flag + config + a short run log
  * ------------------------------------------------------------------ */
