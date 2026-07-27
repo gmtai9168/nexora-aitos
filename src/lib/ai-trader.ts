@@ -37,10 +37,18 @@ export type AiTraderConfig = {
 export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   strategy: "ensemble",
   interval: "5m",
-  symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+  // Full testnet universe by default — the AI scans all of these each cycle and
+  // opens the best, so it gathers a broad, multi-coin track record faster (which
+  // the Go-Live checklist needs). Widening the scan does not raise per-trade risk.
+  symbols: [
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT",
+    "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "DOTUSDT", "LTCUSDT", "TRXUSDT",
+    "BCHUSDT", "ETCUSDT", "XLMUSDT", "ATOMUSDT", "NEARUSDT", "UNIUSDT",
+    "FILUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "INJUSDT", "AAVEUSDT",
+  ],
   riskPct: 2,
   leverage: 5,
-  maxPositions: 8,
+  maxPositions: 12,
   // Tuned to the council's confidence scale — a genuine consensus clears this.
   minConfidence: 60,
   // Tighter than before so trades close and cycle faster — more graded outcomes
