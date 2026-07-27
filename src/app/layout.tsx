@@ -9,6 +9,7 @@ import { LiveAccountProvider } from "@/lib/live-account";
 import { UiProvider } from "@/lib/ui-context";
 import { RoleProvider } from "@/lib/role-context";
 import { RoleGuard } from "@/components/RoleGuard";
+import { AuthProvider } from "@/components/AuthProvider";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const thai = Noto_Sans_Thai({ variable: "--font-thai", subsets: ["thai"] });
@@ -32,22 +33,24 @@ export default function RootLayout({
         className="min-h-full bg-bg text-txt antialiased"
         style={{ fontFamily: "var(--font-thai), var(--font-inter), sans-serif" }}
       >
-        <MarketProvider>
-          <LiveAccountProvider>
-            <UiProvider>
-              <RoleProvider>
-                <TopBar />
-                <Sidebar />
-                <div className="flex min-h-[calc(100vh-70px)] min-w-0 flex-col overflow-x-hidden lg:ml-[196px]">
-                  <main className="min-w-0 flex-1 p-2 sm:p-2.5">
-                    <RoleGuard>{children}</RoleGuard>
-                  </main>
-                  <SystemFooter />
-                </div>
-              </RoleProvider>
-            </UiProvider>
-          </LiveAccountProvider>
-        </MarketProvider>
+        <AuthProvider>
+          <MarketProvider>
+            <LiveAccountProvider>
+              <UiProvider>
+                <RoleProvider>
+                  <TopBar />
+                  <Sidebar />
+                  <div className="flex min-h-[calc(100vh-70px)] min-w-0 flex-col overflow-x-hidden lg:ml-[196px]">
+                    <main className="min-w-0 flex-1 p-2 sm:p-2.5">
+                      <RoleGuard>{children}</RoleGuard>
+                    </main>
+                    <SystemFooter />
+                  </div>
+                </RoleProvider>
+              </UiProvider>
+            </LiveAccountProvider>
+          </MarketProvider>
+        </AuthProvider>
       </body>
     </html>
   );

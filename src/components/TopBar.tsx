@@ -7,6 +7,7 @@ import { useMarket, useNow } from "@/lib/market-context";
 import { useLiveAccount } from "@/lib/live-account";
 import { useUi } from "@/lib/ui-context";
 import { useRole } from "@/lib/role-context";
+import { useSession, signOut } from "next-auth/react";
 import { ROLE_ORDER, ROLES } from "@/lib/rbac";
 import { TOTAL_AGENTS } from "@/lib/agents";
 import { ALL_LISTINGS, badgeText } from "@/lib/universe";
@@ -367,9 +368,11 @@ export function TopBar() {
   );
 }
 
-/** Current user + a role switcher (until real auth ships, this drives RBAC). */
+/** Account menu — real session (login/logout) plus the RBAC role switcher,
+ *  which only privileged roles (admin/founder, or the signed-out owner) may use. */
 function RoleMenu() {
-  const { role, setRole } = useRole();
+  const { role, setRole, canSwitch, authenticated } = useRole();
+  const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -381,6 +384,14 @@ function RoleMenu() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  const displayName = session?.user?.name || (authenticated ? session?.user?.email : "Global Mining") || "Guest";
+  const initials =
+    displayName
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase())
+      .join("") || "GM";
+
   return (
     <div ref={boxRef} className="relative border-l border-line pl-2 sm:pl-3">
       <button
@@ -389,10 +400,10 @@ function RoleMenu() {
         className="flex items-center gap-2"
       >
         <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-brand to-brand-2 text-[10px] font-bold text-black">
-          GM
+          {initials}
         </span>
         <span className="hidden leading-tight text-left sm:block">
-          <span className="block text-[11px] text-txt">Global Mining</span>
+          <span className="block max-w-[120px] truncate text-[11px] text-txt">{displayName}</span>
           <span className="block text-[9px] text-brand">{ROLES[role].th}</span>
         </span>
         <IconChevronDown size={13} className="hidden text-dim sm:block" />
@@ -400,45 +411,91 @@ function RoleMenu() {
 
       {open && (
         <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[248px] rounded-lg border border-line bg-panel p-1.5 shadow-xl">
-          <p className="px-2 py-1 text-[9px] text-dim">
-            บทบาท (RBAC) — สลับเพื่อดูสิทธิ์แต่ละระดับ
-          </p>
-          <ul className="max-h-[360px] overflow-y-auto">
-            {ROLE_ORDER.map((r) => {
-              const info = ROLES[r];
-              const activeRole = r === role;
-              return (
-                <li key={r}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRole(r);
-                      setOpen(false);
-                    }}
-                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-[#0e1a24] ${
-                      activeRole ? "bg-[#0e1f26]" : ""
-                    }`}
-                  >
-                    <span
-                      className={`num grid size-[18px] shrink-0 place-items-center rounded text-[9px] font-bold ${
-                        activeRole ? "bg-brand text-black" : "bg-[#16242f] text-muted"
-                      }`}
-                    >
-                      {info.level}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[10.5px] text-txt">{info.th}</span>
-                      <span className="block truncate text-[8.5px] text-dim">{info.en} · {info.desc}</span>
-                    </span>
-                    {activeRole && <span className="shrink-0 text-[9px] text-brand">✓</span>}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="border-t border-line-soft px-2 pt-1.5 text-[8px] leading-snug text-dim">
-            โหมดสาธิตสิทธิ์ — ระบบสมาชิกจริง (สมัคร/KYC/แพ็กเกจ) เป็นเฟสถัดไปที่ต้องมี backend
-          </p>
+          {authenticated ? (
+            <Link
+              href="/account"
+              onClick={() => setOpen(false)}
+              className="mb-1 block rounded-md bg-[#0e1a24] px-2 py-2 hover:bg-[#12222d]"
+            >
+              <div className="truncate text-[11px] text-txt">{session?.user?.name || "สมาชิก"}</div>
+              <div className="truncate text-[9px] text-dim">{session?.user?.email}</div>
+              {session?.user && !session.user.verified && (
+                <div className="mt-1 text-[8.5px] text-warn">ยังไม่ได้ยืนยันอีเมล</div>
+              )}
+              <div className="mt-1 text-[9px] text-brand">จัดการบัญชี · ความปลอดภัย →</div>
+            </Link>
+          ) : (
+            <div className="mb-1 flex gap-1.5 px-1 py-1">
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="flex-1 rounded-md bg-brand px-2 py-1.5 text-center text-[10.5px] font-semibold text-black"
+              >
+                เข้าสู่ระบบ
+              </Link>
+              <Link
+                href="/signup"
+                onClick={() => setOpen(false)}
+                className="flex-1 rounded-md border border-line px-2 py-1.5 text-center text-[10.5px] text-txt"
+              >
+                สมัครสมาชิก
+              </Link>
+            </div>
+          )}
+
+          {canSwitch && (
+            <>
+              <p className="px-2 py-1 text-[9px] text-dim">
+                บทบาท (RBAC) — สลับเพื่อดูสิทธิ์แต่ละระดับ
+              </p>
+              <ul className="max-h-[300px] overflow-y-auto">
+                {ROLE_ORDER.map((r) => {
+                  const info = ROLES[r];
+                  const activeRole = r === role;
+                  return (
+                    <li key={r}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRole(r);
+                          setOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-[#0e1a24] ${
+                          activeRole ? "bg-[#0e1f26]" : ""
+                        }`}
+                      >
+                        <span
+                          className={`num grid size-[18px] shrink-0 place-items-center rounded text-[9px] font-bold ${
+                            activeRole ? "bg-brand text-black" : "bg-[#16242f] text-muted"
+                          }`}
+                        >
+                          {info.level}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[10.5px] text-txt">{info.th}</span>
+                          <span className="block truncate text-[8.5px] text-dim">{info.en} · {info.desc}</span>
+                        </span>
+                        {activeRole && <span className="shrink-0 text-[9px] text-brand">✓</span>}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+
+          {authenticated && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                signOut({ callbackUrl: "/" });
+              }}
+              className="mt-1 w-full rounded-md border-t border-line-soft px-2 py-2 text-left text-[10.5px] text-down hover:bg-[#0e1a24]"
+            >
+              ออกจากระบบ
+            </button>
+          )}
         </div>
       )}
     </div>

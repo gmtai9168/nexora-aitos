@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { accessFor, canEdit, canOpen, type Access, type Role } from "./rbac";
 
 const STORAGE_KEY = "nexora-role";
@@ -18,18 +19,22 @@ const VALID: Role[] = [
   "founder",
 ];
 
-function loadRole(): Role {
-  if (typeof window === "undefined") return DEFAULT_ROLE;
+function loadOverride(): Role | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw && VALID.includes(raw as Role) ? (raw as Role) : DEFAULT_ROLE;
+    return raw && VALID.includes(raw as Role) ? (raw as Role) : null;
   } catch {
-    return DEFAULT_ROLE;
+    return null;
   }
 }
 
 type RoleState = {
   role: Role;
+  /** True when the active role comes from a real signed-in session. */
+  authenticated: boolean;
+  /** Whether the current role may use the manual role switcher (preview). */
+  canSwitch: boolean;
   setRole: (r: Role) => void;
   access: (href: string) => Access;
   canOpen: (href: string) => boolean;
@@ -39,31 +44,51 @@ type RoleState = {
 const RoleContext = createContext<RoleState | null>(null);
 
 /**
- * Holds the active role client-side (until a real auth backend replaces it) so
- * the whole permission matrix is enforced and demonstrable via the switcher.
+ * Resolves the active role. When a user is signed in, their real role (from the
+ * session JWT) is authoritative — only admin/founder keep the manual switcher
+ * for previewing other roles. When nobody is signed in, the app falls back to a
+ * local override (default: founder) so the live owner is never locked out and
+ * the permission matrix stays demonstrable.
  */
 export function RoleProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = useState<Role>(loadRole);
+  const { data: session, status } = useSession();
+  const sessionRole = session?.user?.role as Role | undefined;
+
+  const [override, setOverrideState] = useState<Role | null>(loadOverride);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, role);
+      if (override) localStorage.setItem(STORAGE_KEY, override);
     } catch {
       /* storage full — keep it in memory */
     }
-  }, [role]);
+  }, [override]);
 
-  const setRole = useCallback((r: Role) => setRoleState(r), []);
+  const authed = status === "authenticated" && !!sessionRole;
+  const privileged = !authed || sessionRole === "founder" || sessionRole === "admin";
+
+  const role: Role = privileged
+    ? override ?? sessionRole ?? DEFAULT_ROLE
+    : sessionRole ?? DEFAULT_ROLE;
+
+  const setRole = useCallback(
+    (r: Role) => {
+      if (privileged) setOverrideState(r);
+    },
+    [privileged],
+  );
 
   const value = useMemo<RoleState>(
     () => ({
       role,
+      authenticated: authed,
+      canSwitch: privileged,
       setRole,
       access: (href: string) => accessFor(role, href),
       canOpen: (href: string) => canOpen(role, href),
       canEdit: (href: string) => canEdit(role, href),
     }),
-    [role, setRole],
+    [role, authed, privileged, setRole],
   );
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
