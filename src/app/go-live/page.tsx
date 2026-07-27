@@ -89,7 +89,7 @@ export default function GoLivePage() {
           <div className="rounded-lg border border-down/40 bg-down/10 px-3 py-2.5 text-[11px] leading-relaxed text-down">
             ⚠️ <b>ระบบยังทำงานแบบ PAPER/Testnet</b> — checklist นี้เป็นเพียงตัวประเมิน ไม่ได้เปิดการเทรดเงินจริง
             ต่อให้ผ่านครบทุกข้อ การใช้เงินจริงยังเป็นการตัดสินใจของคุณ และควรเริ่มด้วย
-            <b> เงินก้อนเล็ก + leverage ต่ำ (1–2x ไม่ใช่ 10x)</b> เพื่อทดสอบ slippage/funding จริงก่อน
+            <b> เงินก้อนเล็กที่ leverage 5x (ขั้นต่ำที่ตั้งไว้)</b> เพื่อทดสอบ slippage/funding จริงก่อนค่อยเพิ่มขนาด
           </div>
 
           {/* Checklist */}

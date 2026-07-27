@@ -387,7 +387,7 @@ export function AutonomousPanel({ onTraded }: { onTraded: () => void }) {
       <div className="grid grid-cols-3 gap-2">
         {[
           { k: "riskPct" as const, l: "เสี่ยง/ไม้ %", min: 0.5, max: AI_LIMITS.maxRiskPct, step: 0.5 },
-          { k: "leverage" as const, l: "Leverage", min: 1, max: AI_LIMITS.maxLeverage, step: 1 },
+          { k: "leverage" as const, l: "Leverage", min: AI_LIMITS.minLeverage, max: AI_LIMITS.maxLeverage, step: 1 },
           { k: "maxPositions" as const, l: "สถานะสูงสุด", min: 1, max: AI_LIMITS.maxPositionsCeiling, step: 1 },
           { k: "minConfidence" as const, l: "มั่นใจขั้นต่ำ %", min: 50, max: 95, step: 1 },
           { k: "takeProfitPct" as const, l: "TP % (มาร์จิน)", min: 5, max: 200, step: 5 },

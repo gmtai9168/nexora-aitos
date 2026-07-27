@@ -71,6 +71,8 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
 
 /** Hard ceilings the engine clamps the config to, whatever the UI sends. */
 export const AI_LIMITS = {
+  // Hard floor per the operator's rule: leverage must never be set below 5x.
+  minLeverage: 5,
   maxLeverage: 20,
   // Raised so the AI can hold positions across many of the 24 coins at once
   // (broader data collection). Each still uses riskPct margin, so total exposure
@@ -147,7 +149,7 @@ export type CycleReport = {
 export function sanitizeConfig(c: AiTraderConfig): AiTraderConfig {
   return {
     ...c,
-    leverage: Math.max(1, Math.min(AI_LIMITS.maxLeverage, Math.round(c.leverage))),
+    leverage: Math.max(AI_LIMITS.minLeverage, Math.min(AI_LIMITS.maxLeverage, Math.round(c.leverage))),
     maxPositions: Math.max(1, Math.min(AI_LIMITS.maxPositionsCeiling, Math.round(c.maxPositions))),
     riskPct: Math.max(0.5, Math.min(AI_LIMITS.maxRiskPct, c.riskPct)),
     minConfidence: Math.max(50, Math.min(95, c.minConfidence)),
