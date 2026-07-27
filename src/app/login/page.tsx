@@ -102,6 +102,14 @@ function LoginForm() {
 
         {error && <div className="rounded-lg bg-down/10 px-3 py-2 text-xs text-down">{error}</div>}
 
+        {!needTotp && (
+          <div className="text-right">
+            <Link href="/forgot" className="text-[11px] text-muted hover:text-brand hover:underline">
+              ลืมรหัสผ่าน?
+            </Link>
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={busy || (needTotp && totp.length !== 6)}

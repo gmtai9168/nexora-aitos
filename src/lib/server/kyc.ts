@@ -22,7 +22,25 @@ export type KycSubmission = {
 };
 
 const key = (email: string) => `nexora:kyc:${email.trim().toLowerCase()}`;
+const INDEX_KEY = "nexora:kyc:index";
 const MAX_IMAGE = 600_000; // ~600 KB data-URI cap
+
+/** Maintains a de-duplicated list of every email that has submitted KYC. */
+async function addToIndex(email: string): Promise<void> {
+  const list = (await kvGetJson<string[]>(INDEX_KEY)) ?? [];
+  const e = email.trim().toLowerCase();
+  if (!list.includes(e)) await kvSetJson(INDEX_KEY, [...list, e]);
+}
+
+/** All submissions (image stripped), newest first — for the admin review queue. */
+export async function listSubmissions(): Promise<ReturnType<typeof toSummary>[]> {
+  const emails = (await kvGetJson<string[]>(INDEX_KEY)) ?? [];
+  const subs = await Promise.all(emails.map((e) => getKyc(e)));
+  return subs
+    .filter((s): s is KycSubmission => Boolean(s))
+    .sort((a, b) => b.submittedAt - a.submittedAt)
+    .map(toSummary);
+}
 
 export async function getKyc(email: string): Promise<KycSubmission | null> {
   return kvGetJson<KycSubmission>(key(email));
@@ -43,6 +61,7 @@ export async function submitKyc(
     submittedAt: Date.now(),
   };
   await kvSetJson(key(email), sub);
+  await addToIndex(sub.email);
   await updateUser(email, { kyc: "pending" });
   return sub;
 }

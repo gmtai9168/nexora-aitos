@@ -51,7 +51,7 @@ export type PublicUser = Omit<StoredUser, "password" | "totpSecret">;
 
 const key = (email: string) => `nexora:user:${email.trim().toLowerCase()}`;
 
-function hashPassword(password: string): string {
+export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
@@ -117,6 +117,14 @@ export async function updateUser(email: string, patch: Partial<StoredUser>): Pro
   const next = { ...current, ...patch, email: current.email, id: current.id };
   await kvSetJson(key(email), next);
   return next;
+}
+
+/** Sets a new password (re-hashed) for an existing user; returns success. */
+export async function updatePassword(email: string, newPassword: string): Promise<boolean> {
+  const current = await getUser(email);
+  if (!current) return false;
+  const next = { ...current, password: hashPassword(newPassword) };
+  return kvSetJson(key(email), next);
 }
 
 /** Find-or-create for OAuth sign-ins. */

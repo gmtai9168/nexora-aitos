@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getUser } from "@/lib/server/users";
-import { getKyc, reviewKyc, toSummary } from "@/lib/server/kyc";
+import { getKyc, reviewKyc, toSummary, listSubmissions } from "@/lib/server/kyc";
 
 export const runtime = "nodejs";
 
@@ -14,12 +14,14 @@ async function requireAdmin(): Promise<string | null> {
   return user && (user.role === "admin" || user.role === "founder") ? email : null;
 }
 
-/** GET ?email= → view a submission (with image) for review. */
+/** GET → list the whole review queue. GET ?email= → one submission (with image). */
 export async function GET(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const target = new URL(req.url).searchParams.get("email");
-  if (!target) return NextResponse.json({ error: "missing_email" }, { status: 400 });
+  if (!target) {
+    return NextResponse.json({ submissions: await listSubmissions() });
+  }
   const sub = await getKyc(target);
   return NextResponse.json({ submission: sub });
 }

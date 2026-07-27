@@ -425,6 +425,20 @@ function RoleMenu() {
               <div className="mt-1 text-[9px] text-brand">จัดการบัญชี · ความปลอดภัย →</div>
             </Link>
           ) : (
+            <></>
+          )}
+
+          {authenticated && (role === "admin" || role === "founder") && (
+            <Link
+              href="/admin/kyc"
+              onClick={() => setOpen(false)}
+              className="mb-1 block rounded-md px-2 py-1.5 text-[10.5px] text-txt hover:bg-[#0e1a24]"
+            >
+              🛡️ ตรวจสอบ KYC (แอดมิน)
+            </Link>
+          )}
+
+          {!authenticated && (
             <div className="mb-1 flex gap-1.5 px-1 py-1">
               <Link
                 href="/login"
