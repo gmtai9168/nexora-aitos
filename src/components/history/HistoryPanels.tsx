@@ -15,8 +15,10 @@ import {
 } from "@/lib/trade-history";
 import { Panel, Tag } from "../Panel";
 
+// Force the Gregorian calendar (…-u-ca-gregory) so years read as ค.ศ. (e.g. 25),
+// not the Thai Buddhist year (2568 → "68") which looked like a wrong/future date.
 export const dtLong = (unix: number) =>
-  new Date(unix * 1000).toLocaleString("th-TH", {
+  new Date(unix * 1000).toLocaleString("th-TH-u-ca-gregory", {
     timeZone: "Asia/Bangkok",
     day: "2-digit",
     month: "2-digit",
@@ -27,7 +29,7 @@ export const dtLong = (unix: number) =>
   });
 
 export const dtShort = (unix: number) =>
-  new Date(unix * 1000).toLocaleDateString("th-TH", {
+  new Date(unix * 1000).toLocaleDateString("th-TH-u-ca-gregory", {
     timeZone: "Asia/Bangkok",
     day: "numeric",
     month: "short",
@@ -401,7 +403,9 @@ export function HistoryTable({
 }) {
   const pages = Math.max(1, Math.ceil(rows.length / pageSize));
   const safePage = Math.min(page, pages);
-  const shown = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  // Newest trades first so recent activity is at the top of the table.
+  const ordered = [...rows].sort((a, b) => b.openTime - a.openTime);
+  const shown = ordered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const pageButtons: number[] = [];
   const from = Math.max(1, safePage - 2);

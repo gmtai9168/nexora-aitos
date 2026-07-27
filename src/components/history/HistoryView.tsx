@@ -202,6 +202,12 @@ export function HistoryView() {
 
   return (
     <div className="flex flex-col gap-2.5">
+      <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[11px] text-warn">
+        📊 <b>ข้อมูลจำลองจากราคาจริงย้อนหลัง</b> — หน้านี้ดึงแท่งเทียนจริงจาก Binance{" "}
+        {LEDGER_BASE.bars.toLocaleString()} แท่ง ({LEDGER_BASE.interval}, ~11 เดือน) แล้วจำลองว่ากลยุทธ์จะเทรดอย่างไร
+        เพื่อดูสถิติ · <b>ไม่ใช่คำสั่งจริงที่ AI เปิดบน Testnet</b> (ประวัติการเทรดจริงดูได้ที่หน้า เทรดทดสอบ / Testnet)
+      </div>
+
       <SummaryBar
         s={summary}
         filters={filters}
