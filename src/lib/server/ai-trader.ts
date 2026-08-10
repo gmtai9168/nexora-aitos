@@ -20,6 +20,7 @@ import { AGENT_BY_ID } from "../agents";
 import { riskCheck, roundTripFee, type OrderIntent } from "../testnet";
 import {
   sanitizeConfig,
+  CHOP_REGIMES,
   type AiTraderConfig,
   type CycleReport,
   type Decision,
@@ -202,6 +203,20 @@ export async function runCycle(
     const signal = latestSignal(kl.data, config.strategy);
     if (!signal) {
       out.push({ symbol, action: "no_signal", detail: "โมเดลไม่ให้สัญญาณที่แท่งล่าสุด" });
+      return { decisions: out };
+    }
+
+    // Regime filter — skip choppy/quiet markets where this trend/momentum
+    // strategy consistently lost (sideway/lowVol/liqCascade were net-negative in
+    // real testnet results; trending/volatile regimes paid).
+    if ((config.avoidChop ?? true) && CHOP_REGIMES.has(signal.regime)) {
+      out.push({
+        symbol,
+        action: "regime_skip",
+        side: signal.dir,
+        confidence: signal.confidence,
+        detail: `งดเทรดในสภาพตลาด "${signal.regime}" — กลยุทธ์แพ้ในตลาดออกข้าง/ผันผวนต่ำ`,
+      });
       return { decisions: out };
     }
 

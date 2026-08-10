@@ -32,6 +32,12 @@ export type AiTraderConfig = {
   onchainMode: boolean;
   /** Route entries through the 50-agent Council (weighted by earned track record). */
   councilMode: boolean;
+  /**
+   * Skip opening in choppy/quiet regimes (sideway, lowVol, liqCascade). This is
+   * a trend/momentum system — real testnet results showed those regimes were
+   * heavy net losers while trending/volatile ones paid. Default on.
+   */
+  avoidChop?: boolean;
 };
 
 export const DEFAULT_AI_CONFIG: AiTraderConfig = {
@@ -67,7 +73,11 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   // Dormant scaffold — needs GLASSNODE_API_KEY / NANSEN_API_KEY at real-money launch.
   onchainMode: false,
   councilMode: true,
+  avoidChop: true,
 };
+
+/** Regimes the trend/momentum strategy loses in — skipped when avoidChop is on. */
+export const CHOP_REGIMES = new Set(["sideway", "lowVol", "liqCascade"]);
 
 /** Hard ceilings the engine clamps the config to, whatever the UI sends. */
 export const AI_LIMITS = {
@@ -89,6 +99,7 @@ export type CycleAction =
   | "no_signal"
   | "low_confidence"
   | "learned_avoid"
+  | "regime_skip"
   | "news_lockout"
   | "macro_lockout"
   | "blocked_risk"
@@ -104,6 +115,7 @@ export const ACTION_META: Record<CycleAction, { th: string; tone: "up" | "down" 
   no_signal: { th: "ไม่มีสัญญาณ", tone: "neutral" },
   low_confidence: { th: "ความมั่นใจต่ำ ข้าม", tone: "warn" },
   learned_avoid: { th: "เลี่ยงจากบทเรียนเดิม", tone: "warn" },
+  regime_skip: { th: "งดเทรดตลาดออกข้าง", tone: "warn" },
   news_lockout: { th: "ล็อกจากข่าวแรง", tone: "warn" },
   macro_lockout: { th: "ล็อกช่วงเหตุการณ์สำคัญ", tone: "warn" },
   blocked_risk: { th: "Risk Engine ปฏิเสธ", tone: "down" },
