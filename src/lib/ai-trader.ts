@@ -46,11 +46,12 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   // Full testnet universe by default — the AI scans all of these each cycle and
   // opens the best, so it gathers a broad, multi-coin track record faster (which
   // the Go-Live checklist needs). Widening the scan does not raise per-trade risk.
+  // NEAR (0/7 win) and OP (0/2) were cut as consistent losers after review.
   symbols: [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT",
     "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "DOTUSDT", "LTCUSDT", "TRXUSDT",
-    "BCHUSDT", "ETCUSDT", "XLMUSDT", "ATOMUSDT", "NEARUSDT", "UNIUSDT",
-    "FILUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "INJUSDT", "AAVEUSDT",
+    "BCHUSDT", "ETCUSDT", "XLMUSDT", "ATOMUSDT", "UNIUSDT", "FILUSDT",
+    "APTUSDT", "ARBUSDT", "INJUSDT", "AAVEUSDT",
   ],
   riskPct: 2,
   leverage: 5,
