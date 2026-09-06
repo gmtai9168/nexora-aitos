@@ -38,6 +38,12 @@ export type AiTraderConfig = {
    * heavy net losers while trending/volatile ones paid. Default on.
    */
   avoidChop?: boolean;
+  /**
+   * Shrink new-position size after a run of losing trades (4+ → 60%, 6+ → 35%),
+   * resetting on the next win. Bleeds less through rough patches while staying
+   * in the market to catch the recovery. Default on.
+   */
+  drawdownGuard?: boolean;
 };
 
 export const DEFAULT_AI_CONFIG: AiTraderConfig = {
@@ -75,6 +81,7 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   onchainMode: false,
   councilMode: true,
   avoidChop: true,
+  drawdownGuard: true,
 };
 
 /** Regimes the trend/momentum strategy loses in — skipped when avoidChop is on. */

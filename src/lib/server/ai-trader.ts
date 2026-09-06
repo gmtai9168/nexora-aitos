@@ -328,13 +328,23 @@ export async function runCycle(
   // Best track record first, then highest confidence — scarce slots go to what has worked.
   candidates.sort((a, b) => b.score - a.score || b.confidence - a.confidence);
 
+  // Drawdown guard — after a run of losing trades, shrink new-position size so a
+  // rough patch (like the Q3 dip) bleeds less, while staying in the market to
+  // catch the recovery. Resets to full size as soon as a winner lands.
+  let loseStreak = 0;
+  if (config.drawdownGuard ?? true) {
+    const s = memory.pnlSeries ?? [];
+    for (let i = s.length - 1; i >= 0 && s[i] <= 0; i--) loseStreak++;
+  }
+  const sizeFactor = loseStreak >= 6 ? 0.35 : loseStreak >= 4 ? 0.6 : 1;
+
   for (const c of candidates) {
     if (held.size >= config.maxPositions) {
       decisions.push({ symbol: c.symbol, action: "max_positions", side: c.dir, confidence: c.confidence, learnScore: c.score, detail: `ครบเพดาน ${config.maxPositions} สถานะ — คิวไว้ (คะแนนบทเรียน ${c.score.toFixed(0)})` });
       continue;
     }
 
-    const marginToUse = balance * (config.riskPct / 100);
+    const marginToUse = balance * (config.riskPct / 100) * sizeFactor;
     const rawQty = (marginToUse * config.leverage) / c.price;
     const qty = await roundQuantity(c.symbol, rawQty);
     if (!qty) {
@@ -352,6 +362,7 @@ export async function runCycle(
 
     const learnNote = c.score > 15 ? ` · บทเรียนดี (+${c.score.toFixed(0)})` : c.score < -15 ? ` · บทเรียนเสี่ยง (${c.score.toFixed(0)})` : "";
     const deepNote = c.deepAdj !== 0 ? ` · เชิงลึก ${c.deepAdj >= 0 ? "+" : ""}${c.deepAdj}` : "";
+    const guardNote = sizeFactor < 1 ? ` · 🛡️ ลดขนาดเหลือ ${Math.round(sizeFactor * 100)}% (แพ้ติด ${loseStreak})` : "";
 
     if (!dryRun) {
       const lev = await setLeverage(c.symbol, config.leverage);
@@ -368,11 +379,11 @@ export async function runCycle(
       memory = { ...memory, open: { ...memory.open, [c.symbol]: ctx } };
       opened++;
       held.set(c.symbol, {} as PositionRaw);
-      decisions.push({ symbol: c.symbol, action: "opened", side: c.dir, confidence: c.confidence, learnScore: c.score, deepAdj: c.deepAdj, deepFactors: c.deepFactors, detail: `${c.reason} · ${c.regime}${learnNote}${deepNote}`, price: c.price, qty, orderId: res.data.orderId });
+      decisions.push({ symbol: c.symbol, action: "opened", side: c.dir, confidence: c.confidence, learnScore: c.score, deepAdj: c.deepAdj, deepFactors: c.deepFactors, detail: `${c.reason} · ${c.regime}${learnNote}${deepNote}${guardNote}`, price: c.price, qty, orderId: res.data.orderId });
     } else {
       opened++;
       held.set(c.symbol, {} as PositionRaw);
-      decisions.push({ symbol: c.symbol, action: "opened", side: c.dir, confidence: c.confidence, learnScore: c.score, deepAdj: c.deepAdj, deepFactors: c.deepFactors, detail: `(จำลอง) ${c.reason}${learnNote}${deepNote} · มูลค่า ${verdict.notionalUsd.toFixed(0)} USDT`, price: c.price, qty });
+      decisions.push({ symbol: c.symbol, action: "opened", side: c.dir, confidence: c.confidence, learnScore: c.score, deepAdj: c.deepAdj, deepFactors: c.deepFactors, detail: `(จำลอง) ${c.reason}${learnNote}${deepNote}${guardNote} · มูลค่า ${verdict.notionalUsd.toFixed(0)} USDT`, price: c.price, qty });
     }
   }
 
