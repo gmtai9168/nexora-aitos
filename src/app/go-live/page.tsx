@@ -75,7 +75,7 @@ export default function GoLivePage() {
               </div>
               <div className="min-w-0">
                 <div className={`text-lg font-bold ${r.ready ? "text-up" : "text-warn"}`}>
-                  {r.ready ? "ผ่านเกณฑ์ทุกข้อ" : "ยังไม่พร้อมเทรดจริง"}
+                  {r.ready ? "ผ่านเกณฑ์ — พร้อมทดสอบเงินจริงก้อนเล็ก" : "ยังไม่พร้อมเทรดจริง"}
                 </div>
                 <div className="mt-0.5 text-xs text-muted">
                   ผ่าน {r.passed} / {r.total} ข้อ
