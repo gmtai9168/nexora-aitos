@@ -52,12 +52,13 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   // Full testnet universe by default — the AI scans all of these each cycle and
   // opens the best, so it gathers a broad, multi-coin track record faster (which
   // the Go-Live checklist needs). Widening the scan does not raise per-trade risk.
-  // NEAR (0/7 win) and OP (0/2) were cut as consistent losers after review.
+  // Consistent losers cut after review of real results: NEAR, OP, then
+  // APT (-28), UNI (-27), LINK (-18), LTC (-18), TRX (-3.5). Left with the
+  // symbols that carried the profit.
   symbols: [
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT",
-    "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "DOTUSDT", "LTCUSDT", "TRXUSDT",
-    "BCHUSDT", "ETCUSDT", "XLMUSDT", "ATOMUSDT", "UNIUSDT", "FILUSDT",
-    "APTUSDT", "ARBUSDT", "INJUSDT", "AAVEUSDT",
+    "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "BCHUSDT", "ETCUSDT", "XLMUSDT",
+    "ATOMUSDT", "FILUSDT", "ARBUSDT", "INJUSDT", "AAVEUSDT",
   ],
   riskPct: 2,
   leverage: 5,
@@ -84,8 +85,13 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   drawdownGuard: true,
 };
 
-/** Regimes the trend/momentum strategy loses in — skipped when avoidChop is on. */
-export const CHOP_REGIMES = new Set(["sideway", "lowVol", "liqCascade"]);
+/**
+ * Regimes the strategy does NOT profit in — skipped when avoidChop is on.
+ * sideway/lowVol/liqCascade were heavy losers; downtrend proved flat over 167
+ * trades (−3.5 net) — flat on testnet = losing after real costs, and it only
+ * dilutes the edge, so we concentrate on strongUp/highVol/newsShock which pay.
+ */
+export const CHOP_REGIMES = new Set(["sideway", "lowVol", "liqCascade", "downtrend"]);
 
 /** Hard ceilings the engine clamps the config to, whatever the UI sends. */
 export const AI_LIMITS = {
