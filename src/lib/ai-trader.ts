@@ -65,10 +65,11 @@ export const DEFAULT_AI_CONFIG: AiTraderConfig = {
   maxPositions: 12,
   // Tuned to the council's confidence scale — a genuine consensus clears this.
   minConfidence: 60,
-  // Tighter than before so trades close and cycle faster — more graded outcomes
-  // per hour = faster learning. At 5x these are ~3% / 2% price moves.
-  takeProfitPct: 15,
-  stopLossPct: 10,
+  // TP 20 / SL 15 (at 5x ≈ 4% / 3% price moves). The wider SL cuts premature
+  // whipsaw stop-outs that were dragging the win rate down on a trend strategy,
+  // while keeping a favourable reward:risk and the big runners that drive the edge.
+  takeProfitPct: 20,
+  stopLossPct: 15,
   deepMode: true,
   // On by default in the FREE keyword tier: while ANTHROPIC_API_KEY is unset,
   // headlines are read with keyword scoring only — no LLM call, zero cost.
